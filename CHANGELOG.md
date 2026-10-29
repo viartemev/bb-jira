@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Horizontal Kanban columns with fixed headers, counts, and independent scrolling.
+- Compact board/JQL/issue toolbar with an icon to refresh the current board.
+- Automatic task pagination when scrolling a column.
+- Connection testing and board refresh controls in plugin settings.
+- README screenshots using fictional demonstration data.
+
 - Open Jira in BB’s full-height side panel, alongside Browser and Terminal,
   with a header button in existing threads and a launcher on the New thread screen.
 - Drag issue cards into the composer as native Jira mentions.
