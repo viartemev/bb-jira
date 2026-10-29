@@ -5,6 +5,7 @@ import type { rpcContract } from "./server";
 import type { Detail, Issue } from "./jira";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
+import { mountIssueDrops, issueDragType } from "./issue-drag";
 import { CredentialStatus } from "./settings";
 
 type Board = { id: number; name: string; type: string };
@@ -18,6 +19,7 @@ export function dragIssue(event: DragEvent, issue: Issue) {
   for (const [name, value] of Object.entries(attributes)) pill.setAttribute(name, value);
   pill.textContent = text;
   event.dataTransfer.effectAllowed = "copy";
+  event.dataTransfer.setData(issueDragType, issue.key);
   event.dataTransfer.setData("text/html", pill.outerHTML);
   event.dataTransfer.setData("text/plain", text);
 }
@@ -181,6 +183,7 @@ export function JiraSidebar({ dismiss }: { dismiss: () => void }) {
 }
 
 export default definePluginApp(app => {
+  app.contentScripts.register({ id: "issue-drops", mount: mountIssueDrops });
   app.slots.settingsSection({ id: "connection", title: "Connection status", component: CredentialStatus });
   app.experimental_sidebarFooter.register({ kind: "disclosure", id: "boards", label: "Jira boards", icon: "jira/mark", component: JiraSidebar });
 });
