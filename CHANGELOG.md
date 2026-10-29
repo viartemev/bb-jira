@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Replace the standalone Jira page and panel launchers with a collapsible
-  sidebar footer section that keeps the current conversation open.
+- Open Jira in BB’s full-height side panel, alongside Browser and Terminal,
+  with a header button in existing threads and a launcher on the New thread screen.
 - Drag issue cards into the composer as native Jira mentions.
 - Use a distinct Jira-inspired diamond icon throughout BB.
 

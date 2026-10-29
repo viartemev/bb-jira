@@ -172,18 +172,16 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   </div>;
 }
 
-export function JiraSidebar({ dismiss }: { dismiss: () => void }) {
-  return <section aria-label="Jira boards" className="flex min-h-0 flex-col overflow-hidden" style={{ height: "65vh", maxHeight: "600px" }}>
-    <div className="flex shrink-0 items-center justify-between px-2 py-1">
-      <h2 className="text-sm font-medium">Jira</h2>
-      <Button variant="ghost" size="sm" onClick={dismiss}>Close Jira</Button>
-    </div>
-    <JiraPanel compact />
-  </section>;
+export function JiraSidePanel() {
+  return <JiraPanel compact />;
 }
 
 export default definePluginApp(app => {
   app.contentScripts.register({ id: "issue-drops", mount: mountIssueDrops });
   app.slots.settingsSection({ id: "connection", title: "Connection status", component: CredentialStatus });
-  app.experimental_sidebarFooter.register({ kind: "disclosure", id: "boards", label: "Jira boards", icon: "jira/mark", component: JiraSidebar });
+  app.slots.experimental_tab({ id: "jira", title: "Jira", icon: "jira/mark", context: { kind: "thread" }, availability: "action", layout: "flush", component: JiraSidePanel });
+  app.slots.experimental_newThreadPanelAction({ id: "jira", title: "Jira", icon: "jira/mark", layout: "flush", component: JiraSidePanel });
+  app.slots.experimental_threadAction({ id: "jira", title: "Jira", icon: "jira/mark", group: "jira", placement: "header",
+    item: ({ experimental_panel }) => ({ label: "Jira", icon: "jira/mark", run: () => { experimental_panel.toggleTab({ tab: { id: "jira", context: { kind: "thread" }, availability: "action" }, title: "Jira" }); } }),
+  });
 });

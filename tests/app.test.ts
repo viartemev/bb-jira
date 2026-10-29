@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
-test("Jira sidebar keeps the chat open and supports mention insertion and dragging", async () => {
+test("Jira side panel keeps the chat open and supports mention insertion and dragging", async () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
   Object.defineProperties(globalThis, {
     window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
@@ -13,14 +13,17 @@ test("Jira sidebar keeps the chat open and supports mention insertion and draggi
   const { fireEvent, waitFor } = await import("@testing-library/react");
   const app = await loadPluginApp(() => import("../app"));
   assert.equal(app.navPanels.length, 0, "Jira must not navigate away from the current chat");
-  const sidebar = app.experimentalSidebarFooterItems[0];
-  assert.equal(sidebar.id, "boards");
-  assert.equal(sidebar.kind, "disclosure");
-  assert.equal(sidebar.icon, "jira/mark");
-  if (sidebar.kind !== "disclosure") throw new Error("Expected sidebar disclosure");
+  assert.equal(app.experimentalSidebarFooterItems.length, 0, "Jira must use the full side panel");
+  const panel = app.tabs.find(tab => tab.id === "jira")!;
+  assert.equal(panel.context.kind, "thread");
+  assert.equal(panel.availability, "action");
+  assert.equal(panel.layout, "flush");
+  assert.equal(app.newThreadPanelActions[0].id, "jira");
+  assert.equal(app.threadActions[0].placement, "header");
   const issue = { key: "APP-7", summary: "Checkout", status: "Doing", statusId: "2", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" };
-  let dismissed = false;
-  const slot = renderSlot(sidebar, { dismiss: () => { dismissed = true; } }, {
+  const { JiraSidePanel } = await import("../app");
+  assert.equal(panel.component, JiraSidePanel);
+  const slot = renderSlot({ component: JiraSidePanel }, {}, {
     pluginId: "jira", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
     rpc: { boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
       columns: () => [{ name: "Doing", statusIds: ["2", "3"] }],
@@ -56,7 +59,5 @@ test("Jira sidebar keeps the chat open and supports mention insertion and draggi
     await slot.findByText("Steps");
     fireEvent.click(slot.getByRole("button", { name: "New chat" }));
     await waitFor(() => assert.match(JSON.stringify(slot.inspection.navigateCalls), /jira_issue/));
-    fireEvent.click(slot.getByRole("button", { name: "Close Jira" }));
-    assert.equal(dismissed, true);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });

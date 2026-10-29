@@ -16,7 +16,7 @@ An independent community plugin for BB. Not affiliated with Atlassian.
 
 ## What you get
 
-- **Boards alongside chat:** a collapsible Jira section in the sidebar footer,
+- **Boards alongside chat:** a full-height Jira tab in BB’s side panel, next to Browser and Terminal,
   with configured board columns and issue cards. Opening it keeps your conversation visible.
 - **JQL filters and pagination:** narrow a board to your work and load more
   issues as needed.
@@ -24,7 +24,7 @@ An independent community plugin for BB. Not affiliated with Atlassian.
   attachment metadata. Open tickets by key or Jira browse URL.
 - **Add to chat:** insert a Jira mention without replacing your draft. BB
   fetches the current issue context when you send the message.
-- **Drag to chat:** drag a ticket from the sidebar into the message box to
+- **Drag to chat:** drag a ticket from the side panel into the message box to
   insert a Jira mention at the drop position.
 - **@ mentions:** search for Jira tickets directly from the composer.
 - **Agent access:** four native tools, a CLI and a bundled skill for reading
@@ -64,8 +64,9 @@ Open **Settings → Plugins → Jira** and fill in:
 | Board IDs | Comma-separated IDs such as `17, 42`; empty lists all accessible boards |
 
 Find board IDs in Jira board URLs, for example `rapidView=17` or `/boards/17`.
-Click the **Jira boards** diamond icon at the bottom of the BB sidebar and
-click **Test connection**, then **Refresh**.
+Open the side panel’s **+ → Jira** tab (alongside Browser and Terminal),
+then click **Test connection** and **Refresh**. Existing threads also have a
+**Jira** button in their header to open or close the tab.
 Switching the Jira deployment refreshes the form: the account email is shown only for Cloud, and the token label matches the deployment. Existing settings are preserved. A connection status section explicitly confirms whether a token is saved; use **Test connection** to verify it with Jira. The hidden token field displays `[set]` after saving; this means the token is stored, not that you must enter it again.
 
 **Never paste a token into a chat, issue report or shell command.** BB stores
@@ -89,15 +90,15 @@ with the deployment type and version, without private ticket data.
 
 ### From a board
 
-Open **Jira boards** in the sidebar footer, select a board, and click a card
+Open **Jira** from the side panel’s **+** menu, select a board, and click a card
 to inspect it. Drag a card into the message box or use **Add to chat** to
 place the ticket in the message draft, then add your request:
 
 > Investigate the bug, explain the cause, and propose a fix.
 
 Sending the message resolves the Jira mention into fresh issue context. The
-plugin does not send a message automatically. The sidebar stays beside your
-current conversation; **Close Jira** collapses it without navigating away.
+plugin does not send a message automatically. The side panel stays beside your
+current conversation. Use BB’s panel toggle or close the Jira tab to hide it.
 
 **New chat** opens a draft asking the selected agent to read the issue.
 
