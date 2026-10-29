@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- CI audits production dependencies; tagged releases are published automatically; Dependabot keeps dependencies current.
 - Import board quick filters from Jira Cloud and Server/Data Center, with toggle buttons and JQL composition.
 
 - Horizontal Kanban columns with fixed headers, counts, and independent scrolling.
