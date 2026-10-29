@@ -182,7 +182,8 @@ export class JiraClient {
     const note = comment?.trim() ? commentBodySchema.parse(comment) : "";
     if (note) payload.update = { comment: [{ add: { body: this.commentBody(note) } }] };
     await this.send("POST", `/rest/api/${this.version()}/issue/${key}/transitions`, payload, {}, signal);
-    const raw = await this.get(`/rest/api/${this.version()}/issue/${key}`, { fields: "status" }, signal);
+    // The move is already applied here; a failed readback must not look like a failed move, or a retry would repeat it.
+    const raw = await this.get(`/rest/api/${this.version()}/issue/${key}`, { fields: "status" }, signal).catch(() => null);
     return transitionResultSchema.parse({ key: String(raw?.key ?? key), status: String(raw?.fields?.status?.name ?? "Unknown") });
   }
   async detail(key: string, signal?: AbortSignal): Promise<Detail> {

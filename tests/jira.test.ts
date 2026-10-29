@@ -158,3 +158,8 @@ test("failed writes explain the change and never leak the token or Jira's body",
   const forbidden = new JiraClient(settings, (async () => new Response("No", { status: 403 })) as typeof fetch);
   await assert.rejects(forbidden.transition("APP-7", "31"), /cannot change this issue/);
 });
+
+test("a transition that was applied still succeeds when the status readback fails", async () => {
+  const c = new JiraClient(settings, (async (_input, init) => init?.method === "POST" ? new Response(null, { status: 204 }) : new Response("boom", { status: 500 })) as typeof fetch);
+  assert.deepEqual(await c.transition("APP-7", "31"), { key: "APP-7", status: "Unknown" });
+});
