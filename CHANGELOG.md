@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Comment on issues and move them through workflow transitions from the issue
+  panel, the `jira_comment`/`jira_transitions`/`jira_transition` agent tools and
+  new `bb jira comment|transitions|transition` commands. Writes run as the
+  token's Jira account and never edit fields, assignees or boards.
+- Cloud comment bodies are converted to ADF; Server/Data Center keeps plain text.
+
 - CI audits production dependencies; tagged releases are published automatically; Dependabot keeps dependencies current.
 - Import board quick filters from Jira Cloud and Server/Data Center, with toggle buttons and JQL composition.
 

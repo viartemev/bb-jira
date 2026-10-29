@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { definePluginApp, useRpc, useComposer, useBbNavigate, useRealtime, experimental_promptMentionClipboardAttributes } from "@get-bb/plugin-sdk/app";
 import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
-import type { Detail, Issue, QuickFilter } from "./jira";
+import type { Detail, Issue, QuickFilter, Transition } from "./jira";
 import { combineBoardFilters } from "./lib/board-filters";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -49,6 +49,11 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [transitions, setTransitions] = useState<{ key: string; items: Transition[] } | null>(null);
+  const [transitionId, setTransitionId] = useState("");
+  const [commentDraft, setCommentDraft] = useState("");
+  const [writing, setWriting] = useState(false);
+  const [writeError, setWriteError] = useState("");
   const [refreshId, setRefreshId] = useState(0);
   useRealtime("boards-refresh-requested", () => { void loadBoards(); setRefreshId(id => id + 1); });
   useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
@@ -105,15 +110,50 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   }, [rpc, boardId, effectiveJql, refreshId]);
   async function openIssue(issueKey: string) {
     const generation = ++detailGeneration.current;
-    setLoadingDetail(true); setDetail(null); setError(""); setNotice("");
+    setLoadingDetail(true); setDetail(null); setError(""); setNotice(""); setWriteError("");
+    setCommentDraft(""); setTransitions(null); setTransitionId("");
     try {
       // Accept a Jira browse URL as well as a key; all network requests still go
       // exclusively to the configured Jira server.
       const match = issueKey.trim().match(/(?:^|\/browse\/)([A-Za-z][A-Za-z0-9_]*-\d+)(?:[?#].*)?$/);
       const d = await rpc.call("issue", { key: match?.[1] ?? issueKey.trim() });
-      if (generation === detailGeneration.current) setDetail(d);
+      if (generation !== detailGeneration.current) return;
+      setDetail(d);
+      try {
+        const items = await rpc.call("transitions", { key: d.issue.key });
+        if (generation !== detailGeneration.current) return;
+        setTransitions({ key: d.issue.key, items });
+        setTransitionId(items[0]?.id ?? "");
+      } catch {
+        // Workflow transitions need extra permissions on some setups; the issue itself still opens.
+        if (generation === detailGeneration.current) setTransitions({ key: d.issue.key, items: [] });
+      }
     } catch (e) { if (generation === detailGeneration.current) setError(message(e)); }
     finally { if (generation === detailGeneration.current) setLoadingDetail(false); }
+  }
+  const availableTransitions = transitions && detail && transitions.key === detail.issue.key ? transitions.items : [];
+  async function postComment(issueKey: string) {
+    const body = commentDraft.trim();
+    if (!body || writing) return;
+    setWriting(true); setWriteError("");
+    try {
+      await rpc.call("add_comment", { key: issueKey, body });
+      setRefreshId(id => id + 1);
+      await openIssue(issueKey);
+      setNotice(`${issueKey}: comment added.`);
+    } catch (e) { setWriteError(message(e)); }
+    finally { setWriting(false); }
+  }
+  async function moveIssue(issueKey: string) {
+    if (!transitionId || writing) return;
+    setWriting(true); setWriteError("");
+    try {
+      const result = await rpc.call("transition", { key: issueKey, transitionId });
+      setRefreshId(id => id + 1);
+      await openIssue(issueKey);
+      setNotice(`${issueKey}: status is now ${result.status}.`);
+    } catch (e) { setWriteError(message(e)); }
+    finally { setWriting(false); }
   }
   function addToChat(issue: Issue) {
     composer.insert([{ provider: "issue", id: issue.key, label: issue.key }], { at: "end", block: true });
@@ -175,6 +215,22 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         <Button variant="outline" onClick={() => newChat(detail.issue)}>New chat</Button>
       </div>
       <p className="whitespace-pre-wrap text-sm">{detail.description || "No description."}</p>
+      <div className="space-y-2 rounded-md border border-border p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="jira-transition">Move issue to another status</label>
+          <select id="jira-transition" aria-label="Move issue to another status" className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-xs disabled:opacity-40" value={transitionId} onChange={e => setTransitionId(e.target.value)} disabled={writing || !availableTransitions.length}>
+            {!availableTransitions.length && <option value="">{transitions?.key === detail.issue.key ? "No transitions available" : "Loading transitions…"}</option>}
+            {availableTransitions.map(t => <option key={t.id} value={t.id}>{t.name}{t.to ? ` → ${t.to}` : ""}</option>)}
+          </select>
+          <Button size="sm" variant="outline" disabled={writing || !transitionId} onClick={() => void moveIssue(detail.issue.key)}>Move</Button>
+        </div>
+        <label className="sr-only" htmlFor="jira-comment">Write a comment</label>
+        <textarea id="jira-comment" aria-label="Write a comment" className="min-h-16 w-full resize-y rounded-md border border-input bg-transparent p-2 text-sm" placeholder="Write a comment…" maxLength={32767} value={commentDraft} onChange={e => setCommentDraft(e.target.value)} disabled={writing}/>
+        <div className="flex justify-end">
+          <Button size="sm" disabled={writing || !commentDraft.trim()} onClick={() => void postComment(detail.issue.key)}>{writing ? "Saving…" : "Comment"}</Button>
+        </div>
+        {writeError && <p role="alert" className="text-sm text-destructive">{writeError}</p>}
+      </div>
       <details><summary className="cursor-pointer text-sm">Comments ({detail.comments.length} of {detail.commentsTotal})</summary>
         {detail.comments.map(c => <article key={c.id} className="border-t border-border py-3 text-sm"><p className="text-muted-foreground">{c.author} · {c.created}</p><p className="whitespace-pre-wrap">{c.body}</p></article>)}
         {detail.comments.length < detail.commentsTotal && <p className="text-sm text-muted-foreground">The agent can read more with jira_comments.</p>}

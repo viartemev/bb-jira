@@ -26,7 +26,8 @@ Browse a Kanban board beside your chat, drag in a ticket, and give your agent th
 - **A compact toolbar.** Choose a board, apply a JQL filter, open an issue by key or URL, and refresh the board in one row.
 - **Drag a ticket into chat.** Drop a card anywhere inside the message input, or use **Add to chat**. Your existing draft stays intact.
 - **Fresh context when you send.** A Jira mention resolves into issue fields, description, comments, links, subtasks, and attachment metadata.
-- **Tools for the next question.** Agents can retrieve individual fields, additional comment pages, and other issues through the plugin's tools and CLI.
+- **Write back when you mean to.** Post a comment or move a ticket through its workflow from the issue panel, or ask the agent to do it; Jira permissions and workflow rules still decide what succeeds.
+- **Tools for the next question.** Agents can retrieve individual fields, additional comment pages, and other issues, and can comment or transition an issue when you ask them to.
 
 Independent community plugin for [BB](https://getbb.app). Not affiliated with Atlassian.
 
@@ -114,26 +115,36 @@ Drag a card from the board into the message input. The input highlights while it
 
 ## Agent tools
 
-| Tool | What it reads |
+| Tool | What it does |
 | --- | --- |
-| `jira_issue(key, field?, offset?)` | Issue context, or an individual field in 40k-character chunks |
-| `jira_comments(key, startAt?)` | Up to 50 comments with the next page offset |
-| `jira_boards(startAt?)` | Configured boards or a page of accessible boards |
-| `jira_board_issues(boardId, jql?, startAt?)` | Up to 50 board issues, optionally filtered with JQL |
+| `jira_issue(key, field?, offset?)` | Reads issue context, or an individual field in 40k-character chunks |
+| `jira_comments(key, startAt?)` | Reads up to 50 comments with the next page offset |
+| `jira_boards(startAt?)` | Lists configured boards or a page of accessible boards |
+| `jira_board_issues(boardId, jql?, startAt?)` | Lists up to 50 board issues, optionally filtered with JQL |
+| `jira_comment(key, body)` | Posts a comment as your Jira account |
+| `jira_transitions(key)` | Lists the workflow transitions available on an issue |
+| `jira_transition(key, transitionId, comment?)` | Applies one transition, optionally with a comment |
 
-A bundled [Jira skill](skills/jira/SKILL.md) teaches agents when to fetch context, follow pagination, and treat Jira content as reference data.
+A bundled [Jira skill](skills/jira/SKILL.md) teaches agents when to fetch context, follow pagination, treat Jira content as reference data, and only write when you ask.
 
 The same connection is available from the CLI:
 
 ```sh
 bb jira issue DEMO-104
 bb jira boards --start 0
+bb jira comment DEMO-104 --body "Deployed to staging"
+bb jira transitions DEMO-104
+bb jira transition DEMO-104 --to 31 --comment "Ready for review"
 bb jira --help
 ```
 
+`--body` and `--comment` also accept `-stdin`, so `pbpaste | bb jira comment DEMO-104 --body-stdin` posts multi-line text without shell quoting.
+
 ## Permissions and limits
 
-The plugin **reads Jira only**. It does not change statuses, post comments, assign tickets, or modify boards. Dragging a card adds context to a message; it does not move the ticket between Jira statuses.
+The plugin reads Jira and writes only two things: comments and workflow transitions. It never edits descriptions or fields, assigns tickets, or changes board configuration. Dragging a card adds context to a message; it does not move the ticket between Jira statuses.
+
+Every write runs as your Jira account, with your permissions and workflow rules: a transition that requires a screen, a mandatory field, or a condition fails with Jira's HTTP status and changes nothing. Agents write only when you ask them to; the issue panel has explicit **Comment** and **Move** buttons.
 
 - Access follows the token's Jira account permissions. Board IDs filter the board picker; they are not an access-control boundary.
 - Credentials stay on the BB server. Issue content is shared with your selected agent provider when you send a mention or use a Jira tool.
@@ -147,7 +158,7 @@ The plugin **reads Jira only**. It does not change statuses, post comments, assi
 | Symptom | What to check |
 | --- | --- |
 | HTTP 401 | Token validity, deployment selection, and Cloud account email |
-| HTTP 403 or 404 | The account's permissions and whether the board or issue is visible in Jira |
+| HTTP 403 or 404 | The account's permissions, whether the board or issue is visible in Jira, and whether the workflow allows that transition |
 | Network or TLS error | The BB server's VPN, HTTPS URL, context path, and corporate certificate trust |
 | No boards | Board IDs and Jira Software access; use **Refresh boards** in settings |
 | Missing agent tools | Start a new agent session so BB can load the plugin's tools and skill |

@@ -120,3 +120,45 @@ test("switching boards stops pagination and ignores a late response from the pre
     assert.equal(calls.some(call => call.boardId === 1 && call.startAt === 2), false);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
+
+test("issue detail writes a comment and moves the ticket through a transition", async () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
+  Object.defineProperties(globalThis, {
+    window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
+    navigator: { value: dom.window.navigator, configurable: true }, HTMLElement: { value: dom.window.HTMLElement, configurable: true },
+    MutationObserver: { value: dom.window.MutationObserver, configurable: true },
+  });
+  const { renderSlot } = await import("@get-bb/plugin-sdk/testing/app");
+  const { fireEvent } = await import("@testing-library/react");
+  const { JiraSidePanel } = await import("../app");
+  let status = "To do";
+  const issue = () => ({ key: "APP-7", summary: "Checkout", status, statusId: status === "To do" ? "1" : "3", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" });
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira", rpc: {
+    boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
+    quick_filters: () => ({ available: true, filters: [] }),
+    columns: () => [{ name: "To do", statusIds: ["1"] }, { name: "In progress", statusIds: ["3"] }],
+    issues: input => { const { startAt } = input as { startAt: number }; return { issues: startAt ? [] : [issue()], startAt, total: 1, next: null }; },
+    issue: () => ({ issue: issue(), description: "Steps", fields: {}, comments: [], commentsTotal: 0, attachments: [], links: [], subtasks: [], updated: "" }),
+    transitions: () => [{ id: "31", name: "Start progress", to: "In progress", toId: "3" }],
+    add_comment: input => ({ id: "501", author: "Sam", created: "now", body: (input as { body: string }).body }),
+    transition: () => { status = "In progress"; return { key: "APP-7", status }; },
+  } });
+  try {
+    await slot.findByText("Checkout");
+    fireEvent.click(slot.getByRole("button", { name: /APP-7 · Bug/ }));
+    await slot.findByText("Steps");
+    const select = await slot.findByLabelText("Move issue to another status") as HTMLSelectElement;
+    await slot.findByRole("option", { name: "Start progress → In progress" });
+    fireEvent.change(select, { target: { value: "31" } });
+    const box = slot.getByLabelText("Write a comment") as HTMLTextAreaElement;
+    assert.equal(box.maxLength, 32767);
+    fireEvent.change(box, { target: { value: "привет" } });
+    fireEvent.click(slot.getByRole("button", { name: "Comment" }));
+    await slot.findByText("APP-7: comment added.");
+    assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "add_comment").map(call => call.input), [{ key: "APP-7", body: "привет" }]);
+    assert.equal((slot.getByLabelText("Write a comment") as HTMLTextAreaElement).value, "");
+    fireEvent.click(slot.getByRole("button", { name: "Move" }));
+    await slot.findByText("APP-7: status is now In progress.");
+    assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "transition").map(call => call.input), [{ key: "APP-7", transitionId: "31" }]);
+  } finally { slot.lifecycle.unmount(); dom.window.close(); }
+});
