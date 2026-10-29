@@ -61,11 +61,12 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     await slot.findByText("Steps");
     fireEvent.click(slot.getByRole("button", { name: "New chat" }));
     await waitFor(() => assert.match(JSON.stringify(slot.inspection.navigateCalls), /jira_issue/));
-    fireEvent.click(slot.getByRole("button", { name: "Show more tasks" }));
+    const list = slot.getByRole("button", { name: /APP-7 · Bug/ }).closest("article")!.parentElement!;
+    fireEvent.scroll(list);
     await slot.findByText("Second task");
     assert.ok(slot.getByRole("button", { name: /APP-7 · Bug/ }));
     await slot.findByText("2 of 2 tasks");
-    await slot.behavior.emitRealtime("boards-refresh-requested", {});
+    fireEvent.click(slot.getByRole("button", { name: "Refresh board" }));
     await slot.findByText("1 of 2 tasks");
     assert.equal(slot.queryByText("Second task"), null);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }

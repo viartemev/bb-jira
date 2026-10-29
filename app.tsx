@@ -49,6 +49,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const boardGeneration = useRef(0);
   const detailGeneration = useRef(0);
   const loadingPage = useRef(false);
+  const boardElement = useRef<HTMLDivElement>(null);
 
   async function loadBoards(startAt = 0) {
     setBusy(true); setError("");
@@ -84,6 +85,18 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     } catch (e) { if (generation === boardGeneration.current) setError(message(e)); }
     finally { if (generation === boardGeneration.current) { setBusy(false); loadingPage.current = false; } }
   }
+  useEffect(() => {
+    if (busy || error || next === null || typeof IntersectionObserver === "undefined") return;
+    const observers: IntersectionObserver[] = [];
+    boardElement.current?.querySelectorAll<HTMLElement>("[data-jira-next-page]").forEach(marker => {
+      const observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) void moreIssues();
+      }, { root: marker.parentElement, rootMargin: "0px 0px 120px 0px" });
+      observer.observe(marker);
+      observers.push(observer);
+    });
+    return () => observers.forEach(observer => observer.disconnect());
+  }, [busy, error, next, boardId, filter]);
   async function openIssue(issueKey: string) {
     const generation = ++detailGeneration.current;
     setLoadingDetail(true); setDetail(null); setError(""); setNotice("");
@@ -108,7 +121,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const unmapped = issues.filter(i => !columns.some(c => c.statusIds.includes(i.statusId)));
   if (unmapped.length || !grouped.length) grouped.push({ name: columns.length ? "Other statuses" : "Issues", statusIds: [], items: unmapped });
   return <div className={`flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-background text-foreground ${compact ? "p-2" : "p-4"}`}>
-    <div aria-label="Board controls" className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+    <div aria-label="Board controls" className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.7fr)_2rem] gap-2">
       <label className="sr-only" htmlFor="jira-board">Board</label>
       <select id="jira-board" className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs" value={boardId ?? ""} onChange={e => setBoardId(Number(e.target.value))}>
         {!boards.length && <option value="">No boards</option>}
@@ -122,6 +135,9 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         <Input className="h-8 min-w-0 pl-2 pr-7 text-xs" aria-label="Issue key or Jira link" placeholder="Issue key" value={key} onChange={e => setKey(e.target.value)}/>
         <button className="absolute inset-y-0 right-0 w-7 text-muted-foreground hover:text-foreground disabled:opacity-40" title="Open issue (Enter)" aria-label="Open issue" type="submit" disabled={!key.trim() || loadingDetail}>↵</button>
       </form>
+      <button type="button" className="flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Refresh board" title="Refresh board" disabled={busy || !boardId} onClick={() => setRefreshId(id => id + 1)}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.5-1.6L20 8M4 16l2.4 2.6A7 7 0 0 0 17.9 17"/></svg>
+      </button>
     </div>
     {boardNext !== null && <Button className="shrink-0 self-start" size="sm" variant="ghost" disabled={busy} onClick={() => void loadBoards(boardNext)}>More boards</Button>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -153,10 +169,13 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
     {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira.</p>}
     {boardId && <>
-      <div aria-label="Kanban board" className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+      <div ref={boardElement} aria-label="Kanban board" className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
         {grouped.map((c, idx) => <section key={idx} aria-label={c.name} className="flex min-w-64 w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-muted/30">
           <h2 className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 text-xs font-semibold"><span className="truncate">{c.name}</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{c.items.length}</span></h2>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2" onScroll={event => {
+            const list = event.currentTarget;
+            if (!busy && list.scrollHeight - list.scrollTop - list.clientHeight < 120) void moreIssues();
+          }}>
           {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 shadow-sm space-y-2 cursor-grab active:cursor-grabbing">
             <button className="text-left w-full text-sm space-y-1" onClick={() => void openIssue(i.key)}>
               <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
@@ -165,12 +184,13 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
             <Button size="sm" variant="outline" onClick={() => addToChat(i)}>Add to chat</Button>
           </article>)}
           {!c.items.length && <p className="py-8 text-center text-xs text-muted-foreground">No loaded issues</p>}
+          {next !== null && c.items.length > 0 && <div data-jira-next-page aria-hidden="true" className="h-px" />}
           </div>
         </section>)}
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>{issues.length} of {total} tasks</span>
-        {next !== null && <Button size="sm" variant="outline" disabled={busy} onClick={() => void moreIssues()}>Show more tasks</Button>}
+        {next !== null && <span>Scroll to load more</span>}
       </div>
     </>}
   </div>;

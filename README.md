@@ -67,7 +67,8 @@ Open **Settings → Plugins → Jira** and fill in:
 
 Find board IDs in Jira board URLs, for example `rapidView=17` or `/boards/17`.
 Open the side panel’s **+ → Jira** tab (alongside Browser and Terminal),
-Use **Settings → Plugins → Jira** for **Test connection** and **Refresh boards**. Existing threads also have a
+Use **Settings → Plugins → Jira** for **Test connection** and **Refresh boards**.
+The board toolbar also has a refresh icon beside the compact issue lookup. Existing threads also have a
 **Jira** button in their header to open or close the tab.
 Switching the Jira deployment refreshes the form: the account email is shown only for Cloud, and the token label matches the deployment. Existing settings are preserved. A connection status section explicitly confirms whether a token is saved; use **Test connection** to verify it with Jira. The hidden token field displays `[set]` after saving; this means the token is stored, not that you must enter it again.
 
@@ -121,7 +122,8 @@ assignee = currentUser() AND resolution = Unresolved
 ```
 
 Filters apply within the selected board. Columns and counts describe the
-issues currently loaded; use **Show more tasks** for subsequent pages. This appends tasks to the board;
+issues currently loaded; scroll down a column to load subsequent pages automatically. The refresh icon
+in the top toolbar reloads the selected board;
 **Refresh boards** in settings reloads open boards from the first page.
 
 ## Agent tools
