@@ -25,7 +25,7 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
   assert.equal(panel.component, JiraSidePanel);
   const issueQueries: string[] = [];
   const slot = renderSlot({ component: JiraSidePanel }, {}, {
-    pluginId: "jira", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
+    pluginId: "jira-boards", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
     rpc: { boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
       quick_filters: () => ({ available: true, filters: [{ id: "mine", name: "Only mine", jql: "assignee = currentUser()", description: "" }, { id: "bugs", name: "Bugs", jql: "issuetype = Bug", description: "" }] }),
       columns: () => [{ name: "To do", statusIds: ["1"] }, { name: "Done", statusIds: ["2", "3"] }],
@@ -50,7 +50,7 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     const pill = experimental_readPromptMentionClipboard(clipboard.firstElementChild!);
     assert.equal(pill?.mention.kind, "plugin");
     assert.equal(pill?.mention.id, "APP-7");
-    assert.match(JSON.stringify(pill), /"pluginId":"jira"/);
+    assert.match(JSON.stringify(pill), /"pluginId":"jira-boards"/);
     assert.match(JSON.stringify(pill), /"provider":"issue"/);
     assert.equal(slot.inspection.composer.draft.mentions.length, 0, "Starting or cancelling a drag must not change the draft");
     fireEvent.click([...card.querySelectorAll("button")].find(button => button.textContent === "Add to chat")!);
@@ -99,7 +99,7 @@ test("switching boards stops pagination and ignores a late response from the pre
   let release!: (value: unknown) => void;
   const delayed = new Promise(resolve => { release = resolve; });
   const calls: { boardId: number; startAt: number }[] = [];
-  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira", rpc: {
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira-boards", rpc: {
     boards: () => ({ boards: [{ id: 1, name: "Old board", type: "kanban" }, { id: 2, name: "New board", type: "kanban" }], next: null }),
     quick_filters: () => ({ available: true, filters: [] }),
     columns: () => [{ name: "Done", statusIds: ["1"] }],
@@ -133,7 +133,7 @@ test("issue detail writes a comment and moves the ticket through a transition", 
   const { JiraSidePanel } = await import("../app");
   let status = "To do";
   const issue = () => ({ key: "APP-7", summary: "Checkout", status, statusId: status === "To do" ? "1" : "3", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" });
-  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira", rpc: {
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira-boards", rpc: {
     boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
     quick_filters: () => ({ available: true, filters: [] }),
     columns: () => [{ name: "To do", statusIds: ["1"] }, { name: "In progress", statusIds: ["3"] }],

@@ -1,13 +1,13 @@
 {
-  "name": "bb-plugin-jira",
-  "version": "0.1.0",
+  "name": "bb-plugin-jira-boards",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "bb": ">=0.47",
     "bbPluginSdk": ">=0.6.79"
   },
   "bb": {
-    "name": "Jira",
+    "name": "Jira Boards",
     "description": "Browse Jira boards, bring issues into BB chats, and give agents authenticated Jira tools.",
     "branding": {
       "icon": "./assets/jira.svg",
@@ -67,6 +67,7 @@
     "ai-agents",
     "coding-agents",
     "kanban",
+    "board",
     "jql",
     "personal-access-token"
   ]

@@ -5,7 +5,7 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import plugin from "../server";
 
 test("settings change deployment fields without losing existing credentials", async () => {
-  let { bb, harness } = createFakePluginHost({ pluginId: "jira", settings: { pat: "fake-secret", email: "user@example.test" } });
+  let { bb, harness } = createFakePluginHost({ pluginId: "jira-boards", settings: { pat: "fake-secret", email: "user@example.test" } });
   harness.sdk.stub("plugins.reload", async () => ({}));
   try {
     await plugin(bb);

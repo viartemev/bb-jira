@@ -12,7 +12,7 @@ test("backend surfaces validate inputs, use fresh secrets and resolve issue ment
     if (url.pathname.includes("/issue/")) return Response.json({ key: "APP-7", fields: { summary: "Checkout", description: "Task context", customfield_1: "Acceptance criteria" } });
     return Response.json({ values: [], isLast: true });
   }) as typeof fetch;
-  const { bb, harness } = createFakePluginHost({ pluginId: "jira", settings: { baseUrl: "https://jira.example.test", pat: "fake-first" } });
+  const { bb, harness } = createFakePluginHost({ pluginId: "jira-boards", settings: { baseUrl: "https://jira.example.test", pat: "fake-first" } });
   try {
     await plugin(bb);
     const patSetting = harness.registrations.settingsDescriptors.pat;
@@ -55,7 +55,7 @@ test("write surfaces post comments and transitions with validated input", async 
     if (url.searchParams.get("fields") === "status") return Response.json({ key: "APP-7", fields: { status: { id: "3", name: "In progress" } } });
     return Response.json({ key: "APP-7", fields: { summary: "Checkout", status: { id: "3", name: "In progress" } } });
   }) as typeof fetch;
-  const { bb, harness } = createFakePluginHost({ pluginId: "jira", settings: { baseUrl: "https://jira.example.test", pat: "fake-secret" } });
+  const { bb, harness } = createFakePluginHost({ pluginId: "jira-boards", settings: { baseUrl: "https://jira.example.test", pat: "fake-secret" } });
   try {
     await plugin(bb);
     assert.deepEqual(await harness.behavior.callRpc("add_comment", { key: "APP-7", body: "привет" }), { id: "501", author: "Sam", created: "now", body: "привет" });

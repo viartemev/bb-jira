@@ -22,8 +22,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - name: Package the plugin source
-        run: git archive --format=tar.gz --prefix=bb-jira-${GITHUB_REF_NAME}/ -o bb-jira-${GITHUB_REF_NAME}.tar.gz HEAD
+        run: git archive --format=tar.gz --prefix=bb-jira-boards-${GITHUB_REF_NAME}/ -o bb-jira-boards-${GITHUB_REF_NAME}.tar.gz HEAD
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "bb-jira-${GITHUB_REF_NAME}.tar.gz" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "bb-jira-boards-${GITHUB_REF_NAME}.tar.gz" --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Jira for BB
+# Jira Boards for BB
 
 [English](README.md) · **Русский**
 
@@ -44,12 +44,17 @@ bb plugin install https://github.com/viartemev/bb-jira.git
 BB скачает зависимости, соберёт плагин и включит его. Чтобы обновить установку, которая следует за основной веткой:
 
 ```sh
-bb plugin update jira --yes
+bb plugin update jira-boards --yes
 ```
+
+Плагин устанавливается как **Jira Boards** (`jira-boards`). В прошлых версиях
+он назывался `jira`: удалите ту установку (`bb plugin remove jira`) и после
+установки этой заново введите URL Jira и токен — BB хранит настройки и
+секреты отдельно для каждого плагина.
 
 ## Подключение Jira
 
-Откройте **Settings → Plugins → Jira**.
+Откройте **Settings → Plugins → Jira Boards**.
 
 | Настройка | Что ввести |
 | --- | --- |

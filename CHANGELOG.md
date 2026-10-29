@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-29
 
+- The plugin now installs as **Jira Boards** (`jira-boards`) instead of `jira`,
+  so it can sit in a marketplace beside other Jira plugins. Remove the old
+  installation and enter the URL and token again; BB keeps settings per plugin.
 - Comment on issues and move them through workflow transitions from the issue
   panel, the `jira_comment`/`jira_transitions`/`jira_transition` agent tools and
   new `bb jira comment|transitions|transition` commands. Writes run as the

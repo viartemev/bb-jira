@@ -16,7 +16,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 export function dragIssue(event: DragEvent, issue: Issue) {
   const pill = document.createElement("span");
   const text = `@${issue.key}`;
-  const attributes = experimental_promptMentionClipboardAttributes({ kind: "plugin", pluginId: "jira", provider: "issue", id: issue.key, label: issue.key }, text);
+  const attributes = experimental_promptMentionClipboardAttributes({ kind: "plugin", pluginId: "jira-boards", provider: "issue", id: issue.key, label: issue.key }, text);
   for (const [name, value] of Object.entries(attributes)) pill.setAttribute(name, value);
   pill.textContent = text;
   event.dataTransfer.effectAllowed = "copy";
@@ -282,9 +282,9 @@ export function JiraSidePanel() {
 export default definePluginApp(app => {
   app.contentScripts.register({ id: "issue-drops", mount: mountIssueDrops });
   app.slots.settingsSection({ id: "connection", title: "Connection status", component: CredentialStatus });
-  app.slots.experimental_tab({ id: "jira", title: "Jira", icon: "jira/mark", context: { kind: "thread" }, availability: "action", layout: "flush", component: JiraSidePanel });
-  app.slots.experimental_newThreadPanelAction({ id: "jira", title: "Jira", icon: "jira/mark", layout: "flush", component: JiraSidePanel });
-  app.slots.experimental_threadAction({ id: "jira", title: "Jira", icon: "jira/mark", group: "jira", placement: "header",
-    item: ({ experimental_panel }) => ({ label: "Jira", icon: "jira/mark", run: () => { experimental_panel.toggleTab({ tab: { id: "jira", context: { kind: "thread" }, availability: "action" }, title: "Jira" }); } }),
+  app.slots.experimental_tab({ id: "jira", title: "Jira", icon: "jira-boards/mark", context: { kind: "thread" }, availability: "action", layout: "flush", component: JiraSidePanel });
+  app.slots.experimental_newThreadPanelAction({ id: "jira", title: "Jira", icon: "jira-boards/mark", layout: "flush", component: JiraSidePanel });
+  app.slots.experimental_threadAction({ id: "jira", title: "Jira", icon: "jira-boards/mark", group: "jira", placement: "header",
+    item: ({ experimental_panel }) => ({ label: "Jira", icon: "jira-boards/mark", run: () => { experimental_panel.toggleTab({ tab: { id: "jira", context: { kind: "thread" }, availability: "action" }, title: "Jira" }); } }),
   });
 });
