@@ -115,3 +115,46 @@ test("quick filter JQL preserves OR precedence and a manual ORDER BY", async () 
   assert.equal(combineBoardFilters('summary ~ "ORDER BY" ORDER BY updated DESC', ["priority = High OR priority = Highest", "resolution = Unresolved"]), '(summary ~ "ORDER BY") AND (priority = High OR priority = Highest) AND (resolution = Unresolved) ORDER BY updated DESC');
   assert.equal(combineBoardFilters("ORDER BY updated DESC", ["issuetype = Bug"]), "(issuetype = Bug) ORDER BY updated DESC");
 });
+
+test("comments are posted as plain text on Server and as ADF on Cloud", async () => {
+  const calls: { method?: string; path: string; contentType: string | null; body: any }[] = [];
+  const handler = (url: URL, init?: RequestInit) => {
+    calls.push({ method: init?.method, path: url.pathname, contentType: new Headers(init?.headers).get("Content-Type"), body: init?.body ? JSON.parse(String(init.body)) : null });
+    return { id: 42, author: { displayName: "Sam" }, created: "now", body: init?.body ? JSON.parse(String(init.body)).body : "" };
+  };
+  const server = new JiraClient(settings, fake(handler));
+  assert.deepEqual(await server.addComment("app-7", "привет"), { id: "42", author: "Sam", created: "now", body: "привет" });
+  assert.deepEqual(calls[0], { method: "POST", path: "/jira/rest/api/2/issue/APP-7/comment", contentType: "application/json", body: { body: "привет" } });
+
+  const cloud = new JiraClient({ ...settings, authMode: "cloud", email: "user@example.test" }, fake(handler));
+  const created = await cloud.addComment("APP-7", "line one\nline two");
+  assert.equal(calls[1].path, "/jira/rest/api/3/issue/APP-7/comment");
+  assert.deepEqual(calls[1].body.body, { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "line one" }] }, { type: "paragraph", content: [{ type: "text", text: "line two" }] }] });
+  assert.equal(created.body.includes("line one"), true);
+  for (const body of ["", "   ", "x".repeat(32_768)]) await assert.rejects(server.addComment("APP-7", body));
+});
+
+test("transitions are listed and applied, with an optional comment and the resulting status", async () => {
+  const seen: { method?: string; path: string; body: any }[] = [];
+  const c = new JiraClient(settings, (async (input, init) => {
+    const url = new URL(String(input)); const method = init?.method;
+    seen.push({ method, path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
+    if (url.pathname.endsWith("/transitions") && method === "POST") return new Response(null, { status: 204 });
+    if (url.pathname.endsWith("/transitions")) return Response.json({ transitions: [{ id: "31", name: "Start progress", to: { id: "3", name: "In progress" } }] });
+    assert.equal(url.searchParams.get("fields"), "status");
+    return Response.json({ key: "APP-7", fields: { status: { id: "3", name: "In progress" } } });
+  }) as typeof fetch);
+  assert.deepEqual(await c.transitions("APP-7"), [{ id: "31", name: "Start progress", to: "In progress", toId: "3" }]);
+  assert.deepEqual(await c.transition("APP-7", "31", "moving on"), { key: "APP-7", status: "In progress" });
+  assert.deepEqual(seen[1], { method: "POST", path: "/jira/rest/api/2/issue/APP-7/transitions", body: { transition: { id: "31" }, update: { comment: [{ add: { body: "moving on" } }] } } });
+  await c.transition("APP-7", "31");
+  assert.deepEqual(seen[3].body, { transition: { id: "31" } });
+  for (const id of ["", "../x", "31/../../myself", "x".repeat(80)]) await assert.rejects(c.transition("APP-7", id));
+});
+
+test("failed writes explain the change and never leak the token or Jira's body", async () => {
+  const c = new JiraClient(settings, (async () => new Response("Bearer test-token-never-real", { status: 400 })) as typeof fetch);
+  await assert.rejects(c.addComment("APP-7", "hi"), error => { assert.ok(error instanceof Error); assert.match(error.message, /rejected the change/); assert.ok(!error.message.includes(settings.pat!)); assert.ok(!error.message.includes("Bearer")); return true; });
+  const forbidden = new JiraClient(settings, (async () => new Response("No", { status: 403 })) as typeof fetch);
+  await assert.rejects(forbidden.transition("APP-7", "31"), /cannot change this issue/);
+});
