@@ -5,6 +5,7 @@ import type { rpcContract } from "./server";
 import type { Detail, Issue } from "./jira";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
+import { CredentialStatus } from "./settings";
 
 type Board = { id: number; name: string; type: string };
 type Column = { name: string; statusIds: string[] };
@@ -180,5 +181,6 @@ export function JiraSidebar({ dismiss }: { dismiss: () => void }) {
 }
 
 export default definePluginApp(app => {
+  app.slots.settingsSection({ id: "connection", title: "Connection status", component: CredentialStatus });
   app.experimental_sidebarFooter.register({ kind: "disclosure", id: "boards", label: "Jira boards", icon: "jira/mark", component: JiraSidebar });
 });

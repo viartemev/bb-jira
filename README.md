@@ -66,7 +66,7 @@ Open **Settings → Plugins → Jira** and fill in:
 Find board IDs in Jira board URLs, for example `rapidView=17` or `/boards/17`.
 Click the **Jira boards** diamond icon at the bottom of the BB sidebar and
 click **Test connection**, then **Refresh**.
-Settings take effect on the next request; no plugin reload is needed.
+Switching the Jira deployment refreshes the form: the account email is shown only for Cloud, and the token label matches the deployment. Existing settings are preserved. A connection status section explicitly confirms whether a token is saved; use **Test connection** to verify it with Jira. The hidden token field displays `[set]` after saving; this means the token is stored, not that you must enter it again.
 
 **Never paste a token into a chat, issue report or shell command.** BB stores
 the token as a secret setting on the server; it is not sent to the frontend

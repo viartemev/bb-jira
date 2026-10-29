@@ -24,6 +24,7 @@
     "server.ts",
     "jira.ts",
     "app.tsx",
+    "settings.tsx",
     "components",
     "lib",
     "tests"
