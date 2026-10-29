@@ -33,7 +33,6 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const [boardId, setBoardId] = useState<number | null>(null);
   const [columns, setColumns] = useState<Column[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [next, setNext] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [jql, setJql] = useState("");
   const [filter, setFilter] = useState("");
@@ -48,8 +47,6 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
   const boardGeneration = useRef(0);
   const detailGeneration = useRef(0);
-  const loadingPage = useRef(false);
-  const boardElement = useRef<HTMLDivElement>(null);
 
   async function loadBoards(startAt = 0) {
     setBusy(true); setError("");
@@ -63,40 +60,30 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   useEffect(() => { void loadBoards(); }, [rpc]);
   useEffect(() => {
     const generation = ++boardGeneration.current;
-    loadingPage.current = false;
-    setIssues([]); setColumns([]); setNext(null); setTotal(0);
+    setIssues([]); setColumns([]); setTotal(0);
     if (!boardId) return;
     setBusy(true); setError("");
-    Promise.all([rpc.call("columns", { boardId }), rpc.call("issues", { boardId, jql: filter, startAt: 0 })]).then(([cols, page]) => {
-      if (generation !== boardGeneration.current) return;
-      setColumns(cols); setIssues(page.issues); setNext(page.next); setTotal(page.total);
-    }).catch(e => { if (generation === boardGeneration.current) setError(message(e)); })
-      .finally(() => { if (generation === boardGeneration.current) setBusy(false); });
+    const selectedBoard = boardId;
+    const active = () => generation === boardGeneration.current;
+    void (async () => {
+      try {
+        const [cols, first] = await Promise.all([rpc.call("columns", { boardId: selectedBoard }), rpc.call("issues", { boardId: selectedBoard, jql: filter, startAt: 0 })]);
+        if (!active()) return;
+        setColumns(cols);
+        let page = first;
+        const collected = new Map<string, Issue>();
+        while (active()) {
+          for (const issue of page.issues) collected.set(issue.key, issue);
+          setIssues([...collected.values()]); setTotal(page.total);
+          if (page.next === null) break;
+          if (page.next <= page.startAt) throw new Error("Jira returned a non-advancing task page. Refresh the board to retry.");
+          page = await rpc.call("issues", { boardId: selectedBoard, jql: filter, startAt: page.next });
+        }
+      } catch (e) { if (active()) setError(message(e)); }
+      finally { if (active()) setBusy(false); }
+    })();
     return () => { boardGeneration.current++; };
   }, [rpc, boardId, filter, refreshId]);
-  async function moreIssues() {
-    if (!boardId || next === null || loadingPage.current) return;
-    const generation = boardGeneration.current;
-    loadingPage.current = true; setBusy(true); setError("");
-    try {
-      const page = await rpc.call("issues", { boardId, jql: filter, startAt: next });
-      if (generation !== boardGeneration.current) return;
-      setIssues(old => [...new Map([...old, ...page.issues].map(i => [i.key, i])).values()]); setNext(page.next); setTotal(page.total);
-    } catch (e) { if (generation === boardGeneration.current) setError(message(e)); }
-    finally { if (generation === boardGeneration.current) { setBusy(false); loadingPage.current = false; } }
-  }
-  useEffect(() => {
-    if (busy || error || next === null || typeof IntersectionObserver === "undefined") return;
-    const observers: IntersectionObserver[] = [];
-    boardElement.current?.querySelectorAll<HTMLElement>("[data-jira-next-page]").forEach(marker => {
-      const observer = new IntersectionObserver(entries => {
-        if (entries.some(entry => entry.isIntersecting)) void moreIssues();
-      }, { root: marker.parentElement, rootMargin: "0px 0px 120px 0px" });
-      observer.observe(marker);
-      observers.push(observer);
-    });
-    return () => observers.forEach(observer => observer.disconnect());
-  }, [busy, error, next, boardId, filter]);
   async function openIssue(issueKey: string) {
     const generation = ++detailGeneration.current;
     setLoadingDetail(true); setDetail(null); setError(""); setNotice("");
@@ -120,6 +107,15 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const grouped = columns.map(c => ({ ...c, items: issues.filter(i => c.statusIds.includes(i.statusId)) }));
   const unmapped = issues.filter(i => !columns.some(c => c.statusIds.includes(i.statusId)));
   if (unmapped.length || !grouped.length) grouped.push({ name: columns.length ? "Other statuses" : "Issues", statusIds: [], items: unmapped });
+  const columnKeys = grouped.map(column => new Set(column.items.map(issue => issue.key)));
+  const people = new Map<string, { id: string; name: string; items: Issue[] }>();
+  for (const issue of issues) {
+    const id = issue.assigneeId ?? issue.assignee;
+    if (!people.has(id)) people.set(id, { id, name: issue.assignee, items: [] });
+    people.get(id)!.items.push(issue);
+  }
+  const lanes = [...people.values()].sort((a, b) => a.name === "Unassigned" ? 1 : b.name === "Unassigned" ? -1 : a.name.localeCompare(b.name));
+  const gridStyle = { gridTemplateColumns: `repeat(${grouped.length}, minmax(256px, 1fr))` };
   return <div className={`flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-background text-foreground ${compact ? "p-2" : "p-4"}`}>
     <div aria-label="Board controls" className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.7fr)_2rem] gap-2">
       <label className="sr-only" htmlFor="jira-board">Board</label>
@@ -169,28 +165,31 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
     {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira.</p>}
     {boardId && <>
-      <div ref={boardElement} aria-label="Kanban board" className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
-        {grouped.map((c, idx) => <section key={idx} aria-label={c.name} className="flex min-w-64 w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-muted/30">
-          <h2 className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 text-xs font-semibold"><span className="truncate">{c.name}</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{c.items.length}</span></h2>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2" onScroll={event => {
-            const list = event.currentTarget;
-            if (!busy && list.scrollHeight - list.scrollTop - list.clientHeight < 120) void moreIssues();
-          }}>
-          {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 shadow-sm space-y-2 cursor-grab active:cursor-grabbing">
-            <button className="text-left w-full text-sm space-y-1" onClick={() => void openIssue(i.key)}>
-              <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
-              <span className="block text-xs text-muted-foreground">{i.assignee} · {i.status}</span>
-            </button>
-            <Button size="sm" variant="outline" onClick={() => addToChat(i)}>Add to chat</Button>
-          </article>)}
-          {!c.items.length && <p className="py-8 text-center text-xs text-muted-foreground">No loaded issues</p>}
-          {next !== null && c.items.length > 0 && <div data-jira-next-page aria-hidden="true" className="h-px" />}
+      <div aria-label="Kanban board" className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+        <div style={{ minWidth: `${grouped.length * 272}px` }}>
+          <div className="sticky top-0 z-10 grid border-b border-border bg-background" style={gridStyle}>
+            {grouped.map((c, idx) => <h2 key={idx} className="flex items-center justify-between gap-2 border-r border-border px-3 py-2.5 text-xs font-semibold last:border-r-0"><span className="truncate">{c.name}</span><span className="rounded-full bg-muted px-2 py-0.5 tabular-nums text-muted-foreground">{c.items.length}</span></h2>)}
           </div>
-        </section>)}
+          {lanes.map(person => <details key={person.id} open className="border-b border-border last:border-b-0" aria-label={`Assignee: ${person.name}`}>
+            <summary className="cursor-pointer bg-muted/50 px-3 py-2 text-xs font-semibold"><span className="sticky left-3 inline-flex gap-2"><span>{person.name}</span><span className="font-normal tabular-nums text-muted-foreground">{person.items.length}</span></span></summary>
+            <div className="grid" style={gridStyle}>
+              {grouped.map((c, idx) => <section key={idx} aria-label={`${person.name}: ${c.name}`} className="min-h-24 space-y-2 border-r border-border bg-muted/20 p-2 last:border-r-0">
+                {person.items.filter(i => columnKeys[idx].has(i.key)).map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="cursor-grab space-y-2 rounded-md border border-border bg-card p-3 shadow-sm active:cursor-grabbing">
+                  <button className="w-full space-y-1 text-left text-sm" onClick={() => void openIssue(i.key)}>
+                    <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
+                    <span className="block text-xs text-muted-foreground">{i.status} · {i.priority}</span>
+                  </button>
+                  <Button size="sm" variant="outline" onClick={() => addToChat(i)}>Add to chat</Button>
+                </article>)}
+              </section>)}
+            </div>
+          </details>)}
+          {!busy && !issues.length && <p className="p-8 text-center text-sm text-muted-foreground">No tasks match this board and filter.</p>}
+        </div>
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>{issues.length} of {total} tasks</span>
-        {next !== null && <span>Scroll to load more</span>}
+        <span>{busy ? "Loading all tasks…" : "Grouped by assignee"}</span>
       </div>
     </>}
   </div>;

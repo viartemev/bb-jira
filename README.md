@@ -21,7 +21,7 @@ Browse a Kanban board beside your chat, drag in a ticket, and give your agent th
 ## Bring the board into the conversation
 
 - **A real side panel.** Jira opens as a full-height tab alongside Browser and Terminal. Your conversation stays visible.
-- **A familiar Kanban board.** Horizontal status columns, fixed headings, issue counts, and independent scrolling. More tasks load as you scroll.
+- **A familiar Kanban board.** Horizontal status columns, fixed headings, and collapsible swimlanes grouped by assignee. All task pages load automatically.
 - **A compact toolbar.** Choose a board, apply a JQL filter, open an issue by key or URL, and refresh the board in one row.
 - **Drag a ticket into chat.** Drop a card anywhere inside the message input, or use **Add to chat**. Your existing draft stays intact.
 - **Fresh context when you send.** A Jira mention resolves into issue fields, description, comments, links, subtasks, and attachment metadata.
@@ -78,7 +78,9 @@ The Server / Data Center workflow has been exercised against a live Jira instanc
 
 Open BB's side panel, choose **+ → Jira**, and select a board. Existing threads also have a **Jira** action in their header.
 
-Scroll horizontally to see other status columns, or widen the panel. Scroll down a column to fetch more tasks. The footer shows **loaded / total** task counts; column counts describe the tasks currently loaded.
+Scroll horizontally to see other status columns, or widen the panel. Each person has a collapsible swimlane with their tasks in the matching status columns. Tasks without an assignee have their own lane.
+
+All pages load automatically, so active work on later pages is not hidden behind the first page of completed tasks. The footer shows **loaded / total** task counts and loading progress; counts are complete when loading finishes.
 
 ### Filter, find, refresh
 
@@ -87,7 +89,7 @@ The top toolbar keeps the controls together:
 - **Board selector:** switch between the boards available to your account.
 - **JQL filter:** enter a query and press **Enter** or click the small arrow.
 - **Issue key:** enter `DEMO-104` or a Jira browse URL and press **Enter** to inspect it.
-- **Refresh icon:** reload the selected board with the applied filter. This starts again from the first page; scrolling loads subsequent pages automatically.
+- **Refresh icon:** reload the selected board with the applied filter. This starts again from the first page and automatically continues through the remaining pages.
 
 For example, show your unresolved work:
 

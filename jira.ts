@@ -3,7 +3,7 @@ import { z } from "zod";
 export const keySchema = z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]*-\d+$/, "Use an issue key such as PROJ-123");
 export const pageSchema = z.object({ startAt: z.number().int().min(0).max(1_000_000).default(0) });
 export const boardSchema = z.object({ id: z.number(), name: z.string(), type: z.string().default("unknown") });
-export const issueSchema = z.object({ key: z.string(), summary: z.string(), status: z.string(), statusId: z.string(), assignee: z.string(), priority: z.string(), type: z.string(), url: z.string() });
+export const issueSchema = z.object({ key: z.string(), summary: z.string(), status: z.string(), statusId: z.string(), assignee: z.string(), assigneeId: z.string().optional(), priority: z.string(), type: z.string(), url: z.string() });
 export type Issue = z.infer<typeof issueSchema>;
 export const columnSchema = z.object({ name: z.string(), statusIds: z.array(z.string()) });
 export const issuePageSchema = z.object({ issues: z.array(issueSchema), startAt: z.number(), total: z.number(), next: z.number().nullable() });
@@ -81,7 +81,7 @@ export class JiraClient {
   }
   summary(raw: any): Issue {
     const f = raw.fields ?? {};
-    return { key: String(raw.key), summary: f.summary ?? "", status: f.status?.name ?? "Unknown", statusId: String(f.status?.id ?? ""), assignee: f.assignee?.displayName ?? "Unassigned", priority: f.priority?.name ?? "", type: f.issuetype?.name ?? "", url: `${this.baseUrl}/browse/${encodeURIComponent(raw.key)}` };
+    return { key: String(raw.key), summary: f.summary ?? "", status: f.status?.name ?? "Unknown", statusId: String(f.status?.id ?? ""), assignee: f.assignee?.displayName ?? "Unassigned", assigneeId: f.assignee?.accountId ?? f.assignee?.key ?? f.assignee?.name ?? f.assignee?.displayName ?? "", priority: f.priority?.name ?? "", type: f.issuetype?.name ?? "", url: `${this.baseUrl}/browse/${encodeURIComponent(raw.key)}` };
   }
   async issues(boardId: number, jql: string, startAt: number, signal?: AbortSignal) {
     const data = await this.get(`/rest/agile/1.0/board/${boardId}/issue`, { jql, startAt, maxResults: 50, fields: "summary,status,assignee,priority,issuetype" }, signal);

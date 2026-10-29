@@ -4,7 +4,8 @@
 
 - Horizontal Kanban columns with fixed headers, counts, and independent scrolling.
 - Compact board/JQL/issue toolbar with an icon to refresh the current board.
-- Automatic task pagination when scrolling a column.
+- Load every task page automatically so a first page of completed tasks does not hide active work.
+- Group cards into collapsible assignee swimlanes across the status columns.
 - Connection testing and board refresh controls in plugin settings.
 - README screenshots using fictional demonstration data.
 

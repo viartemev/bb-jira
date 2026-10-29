@@ -20,14 +20,14 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
   assert.equal(panel.layout, "flush");
   assert.equal(app.newThreadPanelActions[0].id, "jira");
   assert.equal(app.threadActions[0].placement, "header");
-  const issue = { key: "APP-7", summary: "Checkout", status: "Doing", statusId: "2", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" };
+  const issue = { key: "APP-7", summary: "Checkout", status: "Done", statusId: "3", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" };
   const { JiraSidePanel } = await import("../app");
   assert.equal(panel.component, JiraSidePanel);
   const slot = renderSlot({ component: JiraSidePanel }, {}, {
     pluginId: "jira", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
     rpc: { boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
-      columns: () => [{ name: "Doing", statusIds: ["2", "3"] }],
-      issues: input => { const { startAt } = input as { startAt: number }; return { issues: [startAt ? { ...issue, key: "APP-8", summary: "Second task" } : issue], startAt, total: 2, next: startAt ? null : 1 }; },
+      columns: () => [{ name: "To do", statusIds: ["1"] }, { name: "Done", statusIds: ["2", "3"] }],
+      issues: input => { const { startAt } = input as { startAt: number }; return { issues: [startAt ? { ...issue, key: "APP-8", summary: "Second task", assignee: "Jordan", status: "To do", statusId: "1" } : issue], startAt, total: 2, next: startAt ? null : 1 }; },
       issue: () => ({ issue, description: "Steps", fields: {}, comments: [], commentsTotal: 0, attachments: [], links: [], subtasks: [], updated: "" }),
     },
   });
@@ -51,7 +51,7 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     assert.match(JSON.stringify(pill), /"pluginId":"jira"/);
     assert.match(JSON.stringify(pill), /"provider":"issue"/);
     assert.equal(slot.inspection.composer.draft.mentions.length, 0, "Starting or cancelling a drag must not change the draft");
-    fireEvent.click(slot.getByRole("button", { name: "Add to chat" }));
+    fireEvent.click([...card.querySelectorAll("button")].find(button => button.textContent === "Add to chat")!);
     assert.equal(slot.inspection.composer.text.includes("Please investigate"), true);
     assert.equal(slot.inspection.composer.draft.mentions.length, 1);
     assert.match(JSON.stringify(slot.inspection.composer.draft.mentions[0]), /APP-7/);
@@ -61,13 +61,53 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     await slot.findByText("Steps");
     fireEvent.click(slot.getByRole("button", { name: "New chat" }));
     await waitFor(() => assert.match(JSON.stringify(slot.inspection.navigateCalls), /jira_issue/));
-    const list = slot.getByRole("button", { name: /APP-7 · Bug/ }).closest("article")!.parentElement!;
-    fireEvent.scroll(list);
+    // A completed first page must not hide another person's active task on page two.
     await slot.findByText("Second task");
-    assert.ok(slot.getByRole("button", { name: /APP-7 · Bug/ }));
     await slot.findByText("2 of 2 tasks");
+    const activeLane = slot.getByLabelText("Assignee: Jordan");
+    const doneLane = slot.getByLabelText("Assignee: Sam");
+    assert.ok(activeLane.contains(slot.getByRole("button", { name: /APP-8 · Bug/ })));
+    assert.ok(doneLane.contains(slot.getByRole("button", { name: /APP-7 · Bug/ })));
+    assert.ok(slot.getByLabelText("Jordan: To do").contains(slot.getByRole("button", { name: /APP-8 · Bug/ })));
+    const before = slot.inspection.rpcCalls.filter(call => call.method === "issues").length;
     fireEvent.click(slot.getByRole("button", { name: "Refresh board" }));
-    await slot.findByText("1 of 2 tasks");
-    assert.equal(slot.queryByText("Second task"), null);
+    await waitFor(() => assert.equal(slot.inspection.rpcCalls.filter(call => call.method === "issues").length, before + 2));
+    await slot.findByText("2 of 2 tasks");
+    assert.ok(slot.getByLabelText("Assignee: Jordan"));
+  } finally { slot.lifecycle.unmount(); dom.window.close(); }
+});
+
+test("switching boards stops pagination and ignores a late response from the previous board", async () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
+  Object.defineProperties(globalThis, {
+    window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
+    navigator: { value: dom.window.navigator, configurable: true }, HTMLElement: { value: dom.window.HTMLElement, configurable: true },
+    MutationObserver: { value: dom.window.MutationObserver, configurable: true },
+  });
+  const { renderSlot } = await import("@get-bb/plugin-sdk/testing/app");
+  const { fireEvent, waitFor } = await import("@testing-library/react");
+  const { JiraSidePanel } = await import("../app");
+  const issue = { key: "OLD-1", summary: "Old task", status: "Done", statusId: "1", assignee: "Sam", priority: "Low", type: "Task", url: "https://jira.example.test/browse/OLD-1" };
+  let release!: (value: unknown) => void;
+  const delayed = new Promise(resolve => { release = resolve; });
+  const calls: { boardId: number; startAt: number }[] = [];
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira", rpc: {
+    boards: () => ({ boards: [{ id: 1, name: "Old board", type: "kanban" }, { id: 2, name: "New board", type: "kanban" }], next: null }),
+    columns: () => [{ name: "Done", statusIds: ["1"] }],
+    issues: input => {
+      const args = input as { boardId: number; startAt: number }; calls.push(args);
+      if (args.boardId === 2) return { issues: [{ ...issue, key: "NEW-1", summary: "New task" }], startAt: 0, total: 1, next: null };
+      return args.startAt ? delayed : { issues: [issue], startAt: 0, total: 3, next: 1 };
+    },
+  } });
+  try {
+    await waitFor(() => assert.ok(calls.some(call => call.boardId === 1 && call.startAt === 1)));
+    fireEvent.change(slot.getByRole("combobox", { name: "Board" }), { target: { value: "2" } });
+    await slot.findByText("New task");
+    release({ issues: [{ ...issue, key: "OLD-2", summary: "Late old task" }], startAt: 1, total: 3, next: 2 });
+    await new Promise(setImmediate);
+    assert.equal(slot.queryByText("Late old task"), null);
+    assert.ok(slot.getByText("New task"));
+    assert.equal(calls.some(call => call.boardId === 1 && call.startAt === 2), false);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });

@@ -1,6 +1,6 @@
 ## Jira tickets, next to your conversation
 
-Choose Jira boards in the plugin settings, browse horizontal Kanban columns beside the conversation, and filter with JQL. A compact toolbar provides issue lookup and refresh; tasks load as you scroll. Open a ticket to inspect its description, fields, comments, subtasks and links.
+Choose Jira boards in the plugin settings, browse horizontal Kanban columns beside the conversation, and filter with JQL. A compact toolbar provides issue lookup and refresh; all task pages load automatically, and collapsible swimlanes group work by assignee. Open a ticket to inspect its description, fields, comments, subtasks and links.
 
 Drag a card into the message input or use **Add to chat** to place a Jira mention in your draft. When you send the message, BB fetches the current ticket context for the agent. You can also find tickets through the **@** menu or open a new conversation with an issue key.
 
