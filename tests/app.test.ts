@@ -23,11 +23,13 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
   const issue = { key: "APP-7", summary: "Checkout", status: "Done", statusId: "3", assignee: "Sam", priority: "High", type: "Bug", url: "https://jira.example.test/browse/APP-7" };
   const { JiraSidePanel } = await import("../app");
   assert.equal(panel.component, JiraSidePanel);
+  const issueQueries: string[] = [];
   const slot = renderSlot({ component: JiraSidePanel }, {}, {
     pluginId: "jira", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
     rpc: { boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
+      quick_filters: () => ({ available: true, filters: [{ id: "mine", name: "Only mine", jql: "assignee = currentUser()", description: "" }, { id: "bugs", name: "Bugs", jql: "issuetype = Bug", description: "" }] }),
       columns: () => [{ name: "To do", statusIds: ["1"] }, { name: "Done", statusIds: ["2", "3"] }],
-      issues: input => { const { startAt } = input as { startAt: number }; return { issues: [startAt ? { ...issue, key: "APP-8", summary: "Second task", assignee: "Jordan", status: "To do", statusId: "1" } : issue], startAt, total: 2, next: startAt ? null : 1 }; },
+      issues: input => { const { startAt, jql } = input as { startAt: number; jql: string }; issueQueries.push(jql); return { issues: [startAt ? { ...issue, key: "APP-8", summary: "Second task", assignee: "Jordan", status: "To do", statusId: "1" } : issue], startAt, total: 2, next: startAt ? null : 1 }; },
       issue: () => ({ issue, description: "Steps", fields: {}, comments: [], commentsTotal: 0, attachments: [], links: [], subtasks: [], updated: "" }),
     },
   });
@@ -74,6 +76,12 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     await waitFor(() => assert.equal(slot.inspection.rpcCalls.filter(call => call.method === "issues").length, before + 2));
     await slot.findByText("2 of 2 tasks");
     assert.ok(slot.getByLabelText("Assignee: Jordan"));
+    fireEvent.click(slot.getByRole("button", { name: "Only mine" }));
+    await waitFor(() => assert.equal(issueQueries.at(-1), "(assignee = currentUser())"));
+    fireEvent.click(slot.getByRole("button", { name: "Bugs" }));
+    await waitFor(() => assert.equal(issueQueries.at(-1), "(assignee = currentUser()) AND (issuetype = Bug)"));
+    fireEvent.click(slot.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => assert.equal(issueQueries.at(-1), ""));
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
 
@@ -93,6 +101,7 @@ test("switching boards stops pagination and ignores a late response from the pre
   const calls: { boardId: number; startAt: number }[] = [];
   const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira", rpc: {
     boards: () => ({ boards: [{ id: 1, name: "Old board", type: "kanban" }, { id: 2, name: "New board", type: "kanban" }], next: null }),
+    quick_filters: () => ({ available: true, filters: [] }),
     columns: () => [{ name: "Done", statusIds: ["1"] }],
     issues: input => {
       const args = input as { boardId: number; startAt: number }; calls.push(args);

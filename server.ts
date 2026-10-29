@@ -1,11 +1,12 @@
 import { defineRpcContract, defineCli, cliCommand, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { JiraClient, boardSchema, columnSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, type JiraSettings } from "./jira";
+import { JiraClient, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, type JiraSettings } from "./jira";
 
 const boardInput = pageSchema.extend({ boardId: z.number().int().positive(), jql: z.string().max(4000).default("") });
 export const rpcContract = defineRpcContract({
   boards: { input: pageSchema, output: z.object({ boards: z.array(boardSchema), next: z.number().nullable() }) },
   columns: { input: z.object({ boardId: z.number().int().positive() }), output: z.array(columnSchema) },
+  quick_filters: { input: z.object({ boardId: z.number().int().positive() }), output: z.object({ filters: z.array(quickFilterSchema), available: z.boolean() }) },
   issues: { input: boardInput, output: issuePageSchema },
   issue: { input: z.object({ key: keySchema }), output: detailSchema },
   connection: { input: z.null(), output: z.object({ displayName: z.string() }) },
@@ -41,6 +42,7 @@ export default async function plugin(bb: BbPluginApi) {
   bb.rpc.register(rpcContract, {
     boards: async ({ startAt }) => (await client()).boards(startAt),
     columns: async ({ boardId }) => (await client()).columns(boardId),
+    quick_filters: async ({ boardId }) => (await client()).quickFilters(boardId),
     issues: async ({ boardId, jql, startAt }) => (await client()).issues(boardId, jql, startAt),
     issue: async ({ key }) => (await client()).detail(key),
     connection: async () => { const user = await (await client()).get("/rest/api/2/myself"); return { displayName: String(user.displayName ?? user.name ?? "Connected") }; },

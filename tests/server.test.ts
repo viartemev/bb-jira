@@ -18,6 +18,8 @@ test("backend surfaces validate inputs, use fresh secrets and resolve issue ment
     const patSetting = harness.registrations.settingsDescriptors.pat;
     assert.ok(patSetting.type === "string" && patSetting.secret);
     await harness.behavior.callRpc("boards", {});
+    assert.deepEqual(await harness.behavior.callRpc("quick_filters", { boardId: 77 }), { available: true, filters: [] });
+    await assert.rejects(harness.behavior.callRpc("quick_filters", { boardId: -1 }));
     await assert.rejects(harness.behavior.callRpc("issues", { boardId: -1 }));
     await harness.behavior.setSettings({ pat: "fake-second" });
     const result = await harness.behavior.callAgentTool("jira_issue", { key: "APP-7" });

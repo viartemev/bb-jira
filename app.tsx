@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { definePluginApp, useRpc, useComposer, useBbNavigate, useRealtime, experimental_promptMentionClipboardAttributes } from "@get-bb/plugin-sdk/app";
 import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
-import type { Detail, Issue } from "./jira";
+import type { Detail, Issue, QuickFilter } from "./jira";
+import { combineBoardFilters } from "./lib/board-filters";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { mountIssueDrops, issueDragType } from "./issue-drag";
@@ -36,6 +37,12 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const [total, setTotal] = useState(0);
   const [jql, setJql] = useState("");
   const [filter, setFilter] = useState("");
+  const [quickFilters, setQuickFilters] = useState<{ boardId: number; items: QuickFilter[] } | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<{ boardId: number; ids: string[] } | null>(null);
+  const [filterWarning, setFilterWarning] = useState("");
+  const visibleFilters = quickFilters?.boardId === boardId ? quickFilters.items : [];
+  const selectedIds = selectedFilters?.boardId === boardId ? selectedFilters.ids : [];
+  const effectiveJql = combineBoardFilters(filter, visibleFilters.filter(f => selectedIds.includes(f.id)).map(f => f.jql));
   const [key, setKey] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState("");
@@ -59,6 +66,18 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   }
   useEffect(() => { void loadBoards(); }, [rpc]);
   useEffect(() => {
+    let active = true;
+    setFilterWarning("");
+    if (!boardId) return;
+    const selectedBoard = boardId;
+    void rpc.call("quick_filters", { boardId: selectedBoard }).then(result => {
+      if (!active) return;
+      setQuickFilters({ boardId: selectedBoard, items: result.filters });
+      if (!result.available) setFilterWarning("This Jira does not expose board quick filters. You can still use JQL.");
+    }, () => { if (active) setFilterWarning("Could not load board quick filters. You can still use JQL; refresh to retry."); });
+    return () => { active = false; };
+  }, [rpc, boardId, refreshId]);
+  useEffect(() => {
     const generation = ++boardGeneration.current;
     setIssues([]); setColumns([]); setTotal(0);
     if (!boardId) return;
@@ -67,7 +86,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     const active = () => generation === boardGeneration.current;
     void (async () => {
       try {
-        const [cols, first] = await Promise.all([rpc.call("columns", { boardId: selectedBoard }), rpc.call("issues", { boardId: selectedBoard, jql: filter, startAt: 0 })]);
+        const [cols, first] = await Promise.all([rpc.call("columns", { boardId: selectedBoard }), rpc.call("issues", { boardId: selectedBoard, jql: effectiveJql, startAt: 0 })]);
         if (!active()) return;
         setColumns(cols);
         let page = first;
@@ -77,13 +96,13 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
           setIssues([...collected.values()]); setTotal(page.total);
           if (page.next === null) break;
           if (page.next <= page.startAt) throw new Error("Jira returned a non-advancing task page. Refresh the board to retry.");
-          page = await rpc.call("issues", { boardId: selectedBoard, jql: filter, startAt: page.next });
+          page = await rpc.call("issues", { boardId: selectedBoard, jql: effectiveJql, startAt: page.next });
         }
       } catch (e) { if (active()) setError(message(e)); }
       finally { if (active()) setBusy(false); }
     })();
     return () => { boardGeneration.current++; };
-  }, [rpc, boardId, filter, refreshId]);
+  }, [rpc, boardId, effectiveJql, refreshId]);
   async function openIssue(issueKey: string) {
     const generation = ++detailGeneration.current;
     setLoadingDetail(true); setDetail(null); setError(""); setNotice("");
@@ -136,6 +155,11 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
       </button>
     </div>
     {boardNext !== null && <Button className="shrink-0 self-start" size="sm" variant="ghost" disabled={busy} onClick={() => void loadBoards(boardNext)}>More boards</Button>}
+    {visibleFilters.length > 0 && <div aria-label="Board quick filters" className="flex shrink-0 gap-1 overflow-x-auto pb-1">
+      {visibleFilters.map(f => <button key={f.id} type="button" aria-pressed={selectedIds.includes(f.id)} title={f.description || f.jql} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground" onClick={() => setSelectedFilters({ boardId: boardId!, ids: selectedIds.includes(f.id) ? selectedIds.filter(id => id !== f.id) : [...selectedIds, f.id] })}>{f.name}</button>)}
+      {selectedIds.length > 0 && <button className="shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedFilters({ boardId: boardId!, ids: [] })}>Clear filters</button>}
+    </div>}
+    {filterWarning && <p className="text-xs text-muted-foreground">{filterWarning}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
     {loadingDetail && <p role="status">Loading issue…</p>}

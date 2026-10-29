@@ -22,6 +22,7 @@ Browse a Kanban board beside your chat, drag in a ticket, and give your agent th
 
 - **A real side panel.** Jira opens as a full-height tab alongside Browser and Terminal. Your conversation stays visible.
 - **A familiar Kanban board.** Horizontal status columns, fixed headings, and collapsible swimlanes grouped by assignee. All task pages load automatically.
+- **Board quick filters.** Use the quick filters already configured in Jira, combine several, or add your own JQL.
 - **A compact toolbar.** Choose a board, apply a JQL filter, open an issue by key or URL, and refresh the board in one row.
 - **Drag a ticket into chat.** Drop a card anywhere inside the message input, or use **Add to chat**. Your existing draft stays intact.
 - **Fresh context when you send.** A Jira mention resolves into issue fields, description, comments, links, subtasks, and attachment metadata.
@@ -90,6 +91,8 @@ The top toolbar keeps the controls together:
 - **JQL filter:** enter a query and press **Enter** or click the small arrow.
 - **Issue key:** enter `DEMO-104` or a Jira browse URL and press **Enter** to inspect it.
 - **Refresh icon:** reload the selected board with the applied filter. This starts again from the first page and automatically continues through the remaining pages.
+
+When the board exposes quick filters, their names appear as compact buttons beneath the toolbar. Click to toggle them; **Clear filters** resets the selection. Selected quick filters and manual JQL are combined with **AND**. If Jira does not expose these filters, the board and manual JQL remain available.
 
 For example, show your unresolved work:
 

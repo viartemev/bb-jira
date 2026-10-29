@@ -79,3 +79,39 @@ test("oversized and invalid JSON responses fail safely", async () => {
   const html = new JiraClient(settings, (async () => new Response("<html>login</html>")) as typeof fetch);
   await assert.rejects(html.boards(), /invalid JSON/);
 });
+
+test("Cloud quick filters follow pagination and normalize IDs", async () => {
+  const c = new JiraClient({ ...settings, authMode: "cloud", email: "user@example.test" }, fake(url => {
+    assert.equal(url.pathname, "/jira/rest/agile/1.0/board/77/quickfilter");
+    return url.searchParams.get("startAt") === "0"
+      ? { values: [{ id: 10, name: "Mine", jql: "assignee = currentUser()" }], isLast: false }
+      : { values: [{ id: 11, name: "Bugs", jql: "issuetype = Bug", description: "Only bugs" }], isLast: true };
+  }));
+  assert.deepEqual(await c.quickFilters(77), { available: true, filters: [
+    { id: "10", name: "Mine", jql: "assignee = currentUser()", description: "" },
+    { id: "11", name: "Bugs", jql: "issuetype = Bug", description: "Only bugs" },
+  ] });
+});
+
+test("Server quick filters use GreenHopper only when the Agile endpoint is absent", async () => {
+  const paths: string[] = [];
+  const c = new JiraClient(settings, (async input => {
+    const url = new URL(String(input)); paths.push(url.pathname);
+    return url.pathname.includes("/agile/") ? new Response("Not found", { status: 404 }) : Response.json({ quickFilters: [{ id: 12, name: "Active", jql: "resolution = Unresolved", description: null }] });
+  }) as typeof fetch);
+  assert.equal((await c.quickFilters(77)).filters[0].id, "12");
+  assert.deepEqual(paths, ["/jira/rest/agile/1.0/board/77/quickfilter", "/jira/rest/greenhopper/1.0/quickfilters/77"]);
+  const unavailable = new JiraClient(settings, (async () => new Response("Not found", { status: 404 })) as typeof fetch);
+  assert.deepEqual(await unavailable.quickFilters(77), { available: false, filters: [] });
+  let requests = 0;
+  const forbidden = new JiraClient(settings, (async () => { requests++; return new Response("No", { status: 403 }); }) as typeof fetch);
+  await assert.rejects(forbidden.quickFilters(77), /HTTP 403/);
+  assert.equal(requests, 1);
+});
+
+test("quick filter JQL preserves OR precedence and a manual ORDER BY", async () => {
+  const { combineBoardFilters } = await import("../lib/board-filters");
+  assert.equal(combineBoardFilters("", ["assignee = currentUser()"]), "(assignee = currentUser())");
+  assert.equal(combineBoardFilters('summary ~ "ORDER BY" ORDER BY updated DESC', ["priority = High OR priority = Highest", "resolution = Unresolved"]), '(summary ~ "ORDER BY") AND (priority = High OR priority = Highest) AND (resolution = Unresolved) ORDER BY updated DESC');
+  assert.equal(combineBoardFilters("ORDER BY updated DESC", ["issuetype = Bug"]), "(issuetype = Bug) ORDER BY updated DESC");
+});

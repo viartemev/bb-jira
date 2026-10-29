@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Import board quick filters from Jira Cloud and Server/Data Center, with toggle buttons and JQL composition.
+
 - Horizontal Kanban columns with fixed headers, counts, and independent scrolling.
 - Compact board/JQL/issue toolbar with an icon to refresh the current board.
 - Load every task page automatically so a first page of completed tasks does not hide active work.

@@ -6,6 +6,12 @@ export const boardSchema = z.object({ id: z.number(), name: z.string(), type: z.
 export const issueSchema = z.object({ key: z.string(), summary: z.string(), status: z.string(), statusId: z.string(), assignee: z.string(), assigneeId: z.string().optional(), priority: z.string(), type: z.string(), url: z.string() });
 export type Issue = z.infer<typeof issueSchema>;
 export const columnSchema = z.object({ name: z.string(), statusIds: z.array(z.string()) });
+export const quickFilterSchema = z.object({ id: z.string().min(1), name: z.string(), jql: z.string(), description: z.string() });
+export type QuickFilter = z.infer<typeof quickFilterSchema>;
+class JiraHttpError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
 export const issuePageSchema = z.object({ issues: z.array(issueSchema), startAt: z.number(), total: z.number(), next: z.number().nullable() });
 export const detailSchema = z.object({
   issue: issueSchema, description: z.string(), fields: z.record(z.string(), z.json()),
@@ -55,7 +61,7 @@ export class JiraClient {
     if (!response.ok) {
       await response.body?.cancel();
       const hint = ({ 401: "Check the token and authentication mode.", 403: "Your account cannot access this resource.", 404: "Resource not found or not visible to your account.", 429: "Rate limited; retry later." } as Record<number, string>)[response.status] ?? "Try again later.";
-      throw new Error(`Jira HTTP ${response.status}. ${hint}`);
+      throw new JiraHttpError(response.status, `Jira HTTP ${response.status}. ${hint}`);
     }
     // Never relay upstream error bodies: they may echo credentials or HTML.
     const reader = response.body?.getReader(); if (!reader) throw new Error("Jira returned an empty response.");
@@ -78,6 +84,34 @@ export class JiraClient {
   async columns(boardId: number, signal?: AbortSignal) {
     const data = await this.get(`/rest/agile/1.0/board/${boardId}/configuration`, {}, signal);
     return (data.columnConfig?.columns ?? []).map((c: any) => ({ name: String(c.name), statusIds: (c.statuses ?? []).map((s: any) => String(s.id)) })) as z.infer<typeof columnSchema>[];
+  }
+  async quickFilters(boardId: number, signal?: AbortSignal): Promise<{ filters: QuickFilter[]; available: boolean }> {
+    const parse = (rows: unknown): QuickFilter[] => z.array(z.object({
+      id: z.union([z.number().int().positive(), z.string().min(1)]).transform(String),
+      name: z.string(), jql: z.string(), description: z.string().nullish().transform(v => v ?? ""),
+    })).parse(rows);
+    try {
+      const filters: QuickFilter[] = [];
+      let startAt = 0;
+      while (true) {
+        const data = await this.get(`/rest/agile/1.0/board/${boardId}/quickfilter`, { startAt, maxResults: 50 }, signal);
+        const page = parse(data.values);
+        filters.push(...page);
+        if (!page.length || data.isLast === true || (typeof data.total === "number" && startAt + page.length >= data.total) || (data.isLast === undefined && data.total === undefined && page.length < 50)) break;
+        startAt += page.length;
+      }
+      return { filters, available: true };
+    } catch (e) {
+      if (this.settings.authMode === "cloud" || !(e instanceof JiraHttpError) || ![404, 405].includes(e.status)) throw e;
+    }
+    // Older Server/DC versions expose the same board filters through GreenHopper.
+    try {
+      const data = await this.get(`/rest/greenhopper/1.0/quickfilters/${boardId}`, {}, signal);
+      return { filters: parse(Array.isArray(data) ? data : data.quickFilters), available: true };
+    } catch (e) {
+      if (e instanceof JiraHttpError && [404, 405].includes(e.status)) return { filters: [], available: false };
+      throw e;
+    }
   }
   summary(raw: any): Issue {
     const f = raw.fields ?? {};
