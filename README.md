@@ -2,6 +2,8 @@
 
 # Jira for BB
 
+**English** · [Русский](README.ru.md)
+
 **Your Jira board. Your conversation. One workspace.**
 
 Browse a Kanban board beside your chat, drag in a ticket, and give your agent the context to get started.
@@ -155,53 +157,53 @@ Every write runs as your Jira account, with your permissions and workflow rules:
 
 ## Roadmap
 
-Что уже работает с тикетом и что ещё нет. Галочка означает, что это есть в текущей версии; остальное — только чтение через панель или API-вызовы вручную.
+What a ticket can do today and what it cannot yet. A ticked box means the current version supports it; everything else is read-only, done by hand in the browser or through raw API calls.
 
-### Чтение
+### Reading
 
-- [x] Тикет целиком: поля, описание, комментарии, связи, подзадачи, метаданные вложений
-- [x] Кастомные поля и большие поля по частям (по 40k символов)
-- [x] Поиск: JQL, @-меню, страницы комментариев
-- [ ] История изменений: кто и когда правил поля и двигал статусы
-- [ ] Вложения: скачивание и просмотр (сейчас только метаданные)
-- [ ] «Мои задачи»: на мне, просроченные, недавно открытые, сохранённые фильтры
-- [ ] Спринт, эпик, иерархия и бэклог
+- [x] The whole issue: fields, description, comments, links, subtasks, attachment metadata
+- [x] Custom fields and large fields in 40k-character chunks
+- [x] Search: JQL, the @ menu, comment pages
+- [ ] Issue history: who changed which field and moved which status
+- [ ] Attachments: download and preview (metadata only today)
+- [ ] "My work": assigned to me, overdue, recently opened, saved filters
+- [ ] Sprint, epic, hierarchy and backlog
 
-### Запись
+### Writing
 
-- [x] Комментарий простым текстом (Server/Data Center — plain text, Cloud — ADF)
-- [x] Смена статуса на простом workflow
-- [ ] Смена статуса, когда экран перехода требует обязательные поля (resolution и другие)
-- [ ] Комментарий с markdown, кодом, списками и @упоминаниями
-- [ ] Редактирование и удаление своего комментария
-- [ ] Назначение исполнителя, «взять на себя»
-- [ ] Summary и description
+- [x] Plain-text comment (plain text on Server/Data Center, ADF on Cloud)
+- [x] Status change on a simple workflow
+- [ ] Status change when the transition screen requires fields (resolution and others)
+- [ ] Comment with markdown, code, lists and @mentions
+- [ ] Edit and delete your own comment
+- [ ] Assignee, "assign to me"
+- [ ] Summary and description
 - [ ] Priority, labels, components, fixVersion
-- [ ] Due date, оценка, worklog
-- [ ] Story points и перенос в спринт
-- [ ] Связи: blocks, relates, duplicates
-- [ ] Epic link, parent и создание подзадач
-- [ ] Создание тикета
-- [ ] Создание подзадач по чек-листу
-- [ ] Вложение файлов и скриншотов
-- [ ] Watch/unwatch и «упомянули меня»
-- [ ] Массовые операции по JQL
+- [ ] Due date, estimate, worklog
+- [ ] Story points and moving issues between sprints
+- [ ] Links: blocks, relates, duplicates
+- [ ] Epic link, parent and subtask creation
+- [ ] Create an issue
+- [ ] Create subtasks from a checklist
+- [ ] Attach files and screenshots
+- [ ] Watch/unwatch and "mentioned me"
+- [ ] Bulk operations over JQL
 
-### Безопасность записи
+### Write safety
 
-- [ ] Черновик и подтверждение перед отправкой: запись идёт от вашего аккаунта
-- [ ] Отчёт «что именно изменилось» после записи (сейчас возвращается только новый статус)
+- [ ] Draft and confirmation before sending: writes run as your account
+- [ ] A report of what exactly changed after a write (today only the new status comes back)
 
-Удаление тикетов не планируется.
+Deleting issues is not planned.
 
-### Порядок работ
+### Order of work
 
-1. Экраны переходов и обязательные поля — иначе кнопка **Move** ненадёжна.
-2. Правка summary, description, priority, labels, due date и назначение исполнителя.
-3. Создание тикетов и подзадач.
-4. «Мои задачи» и сохранённые фильтры.
-5. История изменений и вложения.
-6. Комментарии с разметкой, правкой и удалением.
+1. Transition screens and required fields — otherwise **Move** is unreliable.
+2. Editing summary, description, priority, labels, due date and the assignee.
+3. Creating issues and subtasks.
+4. "My work" and saved filters.
+5. Issue history and attachments.
+6. Comments with markup, editing and deletion.
 
 ## Troubleshooting
 
