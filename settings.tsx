@@ -10,6 +10,7 @@ export function CredentialStatus() {
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
     let active = true;
     rpc.call("credential_status").then(value => { if (active) setStatus(value); }, () => { if (active) setError("Could not read token status. Reopen the settings to try again."); });
@@ -25,10 +26,17 @@ export function CredentialStatus() {
     catch (e) { setError(e instanceof Error ? e.message : "Connection failed."); }
     finally { setChecking(false); }
   }
+  async function refreshBoards() {
+    setRefreshing(true); setFeedback(""); setError("");
+    try { await rpc.call("refresh_boards"); setFeedback("Open Jira tabs are reloading their boards and tasks."); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not refresh boards."); }
+    finally { setRefreshing(false); }
+  }
   return <div className="space-y-3 text-sm">
     <p role="status">{status ? status.saved ? `${status.cloud ? "Cloud API token" : "PAT"} saved securely. You do not need to enter it again.` : "No token saved yet. Enter a token above and save it." : "Checking saved token…"}</p>
     <p className="text-muted-foreground">{status?.cloud ? "Cloud uses your Atlassian account email and a classic API token." : "Data Center / Server uses a personal access token; no email or password is required."} Saving a token stores it; use Test connection to verify that Jira accepts it.</p>
     <Button variant="outline" disabled={!status?.saved || checking} onClick={() => void testConnection()}>{checking ? "Testing…" : "Test connection"}</Button>
+    <Button className="ml-2" variant="outline" disabled={!status?.saved || refreshing} onClick={() => void refreshBoards()}>{refreshing ? "Refreshing…" : "Refresh boards"}</Button>
     {feedback && <p role="status">{feedback}</p>}
     {error && <p role="alert" className="text-destructive">{error}</p>}
   </div>;

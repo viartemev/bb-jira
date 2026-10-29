@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { definePluginApp, useRpc, useComposer, useBbNavigate, experimental_promptMentionClipboardAttributes } from "@get-bb/plugin-sdk/app";
+import { definePluginApp, useRpc, useComposer, useBbNavigate, useRealtime, experimental_promptMentionClipboardAttributes } from "@get-bb/plugin-sdk/app";
 import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
 import type { Detail, Issue } from "./jira";
@@ -43,6 +43,9 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [refreshId, setRefreshId] = useState(0);
+  useRealtime("boards-refresh-requested", () => { void loadBoards(); setRefreshId(id => id + 1); });
+  useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
   const boardGeneration = useRef(0);
   const detailGeneration = useRef(0);
   const loadingPage = useRef(false);
@@ -69,7 +72,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     }).catch(e => { if (generation === boardGeneration.current) setError(message(e)); })
       .finally(() => { if (generation === boardGeneration.current) setBusy(false); });
     return () => { boardGeneration.current++; };
-  }, [rpc, boardId, filter]);
+  }, [rpc, boardId, filter, refreshId]);
   async function moreIssues() {
     if (!boardId || next === null || loadingPage.current) return;
     const generation = boardGeneration.current;
@@ -104,29 +107,27 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const grouped = columns.map(c => ({ ...c, items: issues.filter(i => c.statusIds.includes(i.statusId)) }));
   const unmapped = issues.filter(i => !columns.some(c => c.statusIds.includes(i.statusId)));
   if (unmapped.length || !grouped.length) grouped.push({ name: columns.length ? "Other statuses" : "Issues", statusIds: [], items: unmapped });
-  return <div className={`h-full min-h-0 overflow-auto bg-background text-foreground space-y-3 ${compact ? "p-2" : "p-4"}`}>
-    <div className="flex flex-wrap gap-2 items-center">
-      <label className="text-sm" htmlFor="jira-board">Board</label>
-      <select id="jira-board" className="rounded-md border border-border bg-background p-2 text-sm max-w-full min-w-0" value={boardId ?? ""} onChange={e => setBoardId(Number(e.target.value))}>
-        {!boards.length && <option value="">No boards loaded</option>}
+  return <div className={`flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-background text-foreground ${compact ? "p-2" : "p-4"}`}>
+    <div aria-label="Board controls" className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+      <label className="sr-only" htmlFor="jira-board">Board</label>
+      <select id="jira-board" className="h-8 min-w-0 rounded-md border border-input bg-transparent px-2 text-xs" value={boardId ?? ""} onChange={e => setBoardId(Number(e.target.value))}>
+        {!boards.length && <option value="">No boards</option>}
         {boards.map(b => <option key={b.id} value={b.id}>{b.name} · {b.id}</option>)}
       </select>
-      <Button variant="outline" disabled={busy} onClick={() => { void loadBoards(); setBoardId(null); }}>Refresh</Button>
-      {boardNext !== null && <Button variant="outline" disabled={busy} onClick={() => void loadBoards(boardNext)}>More boards</Button>}
-      <Button variant="outline" onClick={async () => { try { const r = await rpc.call("connection"); setNotice(`Connected as ${r.displayName}`); setError(""); } catch (e) { setError(message(e)); } }}>Test connection</Button>
+      <form className="relative min-w-0" onSubmit={e => { e.preventDefault(); setFilter(jql); }}>
+        <Input className="h-8 min-w-0 pl-2 pr-7 text-xs" aria-label="Filter board using JQL" placeholder="JQL filter" value={jql} onChange={e => setJql(e.target.value)} maxLength={4000}/>
+        <button className="absolute inset-y-0 right-0 w-7 text-muted-foreground hover:text-foreground disabled:opacity-40" title="Apply JQL filter (Enter)" aria-label="Filter" type="submit" disabled={busy}>↵</button>
+      </form>
+      <form className="relative min-w-0" onSubmit={e => { e.preventDefault(); void openIssue(key); }}>
+        <Input className="h-8 min-w-0 pl-2 pr-7 text-xs" aria-label="Issue key or Jira link" placeholder="Issue key" value={key} onChange={e => setKey(e.target.value)}/>
+        <button className="absolute inset-y-0 right-0 w-7 text-muted-foreground hover:text-foreground disabled:opacity-40" title="Open issue (Enter)" aria-label="Open issue" type="submit" disabled={!key.trim() || loadingDetail}>↵</button>
+      </form>
     </div>
-    <form className="flex gap-2" onSubmit={e => { e.preventDefault(); setFilter(jql); }}>
-      <Input aria-label="Filter board using JQL" placeholder='JQL filter, e.g. assignee = currentUser()' value={jql} onChange={e => setJql(e.target.value)} maxLength={4000}/>
-      <Button type="submit" disabled={busy}>Filter</Button>
-    </form>
-    <form className="flex gap-2" onSubmit={e => { e.preventDefault(); void openIssue(key); }}>
-      <Input aria-label="Issue key or Jira link" placeholder="Issue key or Jira link" value={key} onChange={e => setKey(e.target.value)}/>
-      <Button type="submit" disabled={!key.trim() || loadingDetail}>Open issue</Button>
-    </form>
+    {boardNext !== null && <Button className="shrink-0 self-start" size="sm" variant="ghost" disabled={busy} onClick={() => void loadBoards(boardNext)}>More boards</Button>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
     {loadingDetail && <p role="status">Loading issue…</p>}
-    {detail && <section aria-label={detail.issue.key} className="rounded-lg border border-border bg-card p-4 space-y-3">
+    {detail && <section aria-label={detail.issue.key} className="max-h-[45%] shrink-0 overflow-y-auto rounded-lg border border-border bg-card p-4 space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <a className="underline text-sm" href={detail.issue.url} target="_blank" rel="noreferrer">{detail.issue.key} ↗</a>
         <span className="text-xs text-muted-foreground">{detail.issue.status} · {detail.issue.assignee} · {detail.issue.priority}</span>
@@ -150,25 +151,28 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
       <details><summary className="cursor-pointer text-sm">All fields</summary><pre className="text-xs whitespace-pre-wrap break-all">{JSON.stringify(detail.fields, null, 2)}</pre></details>
     </section>}
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
-    {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira, then refresh.</p>}
+    {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira.</p>}
     {boardId && <>
-      <p className="text-xs text-muted-foreground">Loaded {issues.length} of {total} issues. Drag a ticket into the message box or use Add to chat.</p>
-      <div aria-label="Kanban board" className="flex gap-3 overflow-x-auto pb-3" style={{ height: "min(65vh, 640px)", minHeight: "240px" }}>
-        {grouped.map((c, idx) => <section key={idx} aria-label={c.name} className="min-w-64 w-72 shrink-0 overflow-y-auto rounded-lg border border-border bg-muted/30 px-3 pb-3 space-y-2">
-          <h2 className="sticky top-0 z-10 bg-background py-3 text-sm font-medium">{c.name} <span className="text-muted-foreground">{c.items.length}</span></h2>
-          {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 space-y-2 cursor-grab active:cursor-grabbing">
+      <div aria-label="Kanban board" className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+        {grouped.map((c, idx) => <section key={idx} aria-label={c.name} className="flex min-w-64 w-72 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-muted/30">
+          <h2 className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 text-xs font-semibold"><span className="truncate">{c.name}</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{c.items.length}</span></h2>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+          {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 shadow-sm space-y-2 cursor-grab active:cursor-grabbing">
             <button className="text-left w-full text-sm space-y-1" onClick={() => void openIssue(i.key)}>
               <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
               <span className="block text-xs text-muted-foreground">{i.assignee} · {i.status}</span>
             </button>
             <Button size="sm" variant="outline" onClick={() => addToChat(i)}>Add to chat</Button>
           </article>)}
-          {!c.items.length && <p className="text-xs text-muted-foreground">No loaded issues</p>}
+          {!c.items.length && <p className="py-8 text-center text-xs text-muted-foreground">No loaded issues</p>}
+          </div>
         </section>)}
       </div>
-      {next !== null && <Button variant="outline" disabled={busy} onClick={() => void moreIssues()}>Load more issues</Button>}
+      <div className="flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>{issues.length} of {total} tasks</span>
+        {next !== null && <Button size="sm" variant="outline" disabled={busy} onClick={() => void moreIssues()}>Show more tasks</Button>}
+      </div>
     </>}
-    <p className="text-xs text-muted-foreground">Jira · read-only · credentials stay on the BB server</p>
   </div>;
 }
 

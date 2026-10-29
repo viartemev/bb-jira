@@ -9,6 +9,8 @@ test("settings change deployment fields without losing existing credentials", as
   harness.sdk.stub("plugins.reload", async () => ({}));
   try {
     await plugin(bb);
+    await harness.behavior.callRpc("refresh_boards", null);
+    assert.equal(harness.realtimeSignals.at(-1)?.channel, "boards-refresh-requested");
     assert.equal(harness.registrations.settingsDescriptors.email, undefined);
     assert.equal(harness.registrations.settingsDescriptors.pat.label, "Personal access token (PAT)");
     assert.deepEqual(await harness.behavior.callRpc("credential_status", null), { saved: true, cloud: false });
@@ -42,7 +44,7 @@ test("token status updates after save and distinguishes stored from verified", a
   const { CredentialStatus } = await import("../settings");
   let saved = false;
   const slot = renderSlot({ component: CredentialStatus }, {}, { rpc: {
-    credential_status: () => ({ saved, cloud: true }), connection: () => ({ displayName: "Sam" }),
+    credential_status: () => ({ saved, cloud: true }), connection: () => ({ displayName: "Sam" }), refresh_boards: () => null,
   } });
   try {
     await slot.findByText(/No token saved yet/);
@@ -52,6 +54,8 @@ test("token status updates after save and distinguishes stored from verified", a
     await slot.findByText(/Cloud API token saved securely/);
     fireEvent.click(slot.getByRole("button", { name: "Test connection" }));
     await slot.findByText("Connected as Sam.");
+    fireEvent.click(slot.getByRole("button", { name: "Refresh boards" }));
+    await slot.findByText("Open Jira tabs are reloading their boards and tasks.");
     await slot.behavior.emitRealtime("credential-status-changed", {});
     assert.equal(slot.queryByText("Connected as Sam."), null);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }

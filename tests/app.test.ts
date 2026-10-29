@@ -27,12 +27,14 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     pluginId: "jira", composer: { scope: { kind: "thread", threadId: "t1" }, text: "Please investigate" },
     rpc: { boards: () => ({ boards: [{ id: 9, name: "Team", type: "scrum" }], next: null }),
       columns: () => [{ name: "Doing", statusIds: ["2", "3"] }],
-      issues: () => ({ issues: [issue], startAt: 0, total: 1, next: null }),
+      issues: input => { const { startAt } = input as { startAt: number }; return { issues: [startAt ? { ...issue, key: "APP-8", summary: "Second task" } : issue], startAt, total: 2, next: startAt ? null : 1 }; },
       issue: () => ({ issue, description: "Steps", fields: {}, comments: [], commentsTotal: 0, attachments: [], links: [], subtasks: [], updated: "" }),
     },
   });
   try {
     await slot.findByText("Checkout");
+    assert.equal(slot.queryByRole("button", { name: "Refresh" }), null);
+    assert.equal(slot.queryByRole("button", { name: "Test connection" }), null);
     assert.equal(slot.inspection.navigateCalls.length, 0);
     const card = slot.getByRole("button", { name: /APP-7 · Bug/ }).closest("article")!;
     assert.equal(card.draggable, true);
@@ -59,5 +61,12 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
     await slot.findByText("Steps");
     fireEvent.click(slot.getByRole("button", { name: "New chat" }));
     await waitFor(() => assert.match(JSON.stringify(slot.inspection.navigateCalls), /jira_issue/));
+    fireEvent.click(slot.getByRole("button", { name: "Show more tasks" }));
+    await slot.findByText("Second task");
+    assert.ok(slot.getByRole("button", { name: /APP-7 · Bug/ }));
+    await slot.findByText("2 of 2 tasks");
+    await slot.behavior.emitRealtime("boards-refresh-requested", {});
+    await slot.findByText("1 of 2 tasks");
+    assert.equal(slot.queryByText("Second task"), null);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
