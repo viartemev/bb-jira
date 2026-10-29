@@ -153,9 +153,9 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira, then refresh.</p>}
     {boardId && <>
       <p className="text-xs text-muted-foreground">Loaded {issues.length} of {total} issues. Drag a ticket into the message box or use Add to chat.</p>
-      <div className={compact ? "space-y-3" : "flex gap-3 overflow-x-auto pb-3"}>
-        {grouped.map((c, idx) => <section key={idx} className={`rounded-lg border border-border bg-muted/30 p-3 space-y-2 ${compact ? "min-w-0" : "min-w-64 w-72 shrink-0"}`}>
-          <h2 className="text-sm font-medium">{c.name} <span className="text-muted-foreground">{c.items.length}</span></h2>
+      <div aria-label="Kanban board" className="flex gap-3 overflow-x-auto pb-3" style={{ height: "min(65vh, 640px)", minHeight: "240px" }}>
+        {grouped.map((c, idx) => <section key={idx} aria-label={c.name} className="min-w-64 w-72 shrink-0 overflow-y-auto rounded-lg border border-border bg-muted/30 px-3 pb-3 space-y-2">
+          <h2 className="sticky top-0 z-10 bg-background py-3 text-sm font-medium">{c.name} <span className="text-muted-foreground">{c.items.length}</span></h2>
           {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 space-y-2 cursor-grab active:cursor-grabbing">
             <button className="text-left w-full text-sm space-y-1" onClick={() => void openIssue(i.key)}>
               <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>

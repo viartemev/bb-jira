@@ -18,6 +18,8 @@ An independent community plugin for BB. Not affiliated with Atlassian.
 
 - **Boards alongside chat:** a full-height Jira tab in BB’s side panel, next to Browser and Terminal,
   with configured board columns and issue cards. Opening it keeps your conversation visible.
+- **Kanban layout:** status columns run horizontally, with independent vertical
+  scrolling and pinned column headings. Scroll sideways in a narrow side panel.
 - **JQL filters and pagination:** narrow a board to your work and load more
   issues as needed.
 - **Issue details:** descriptions, custom fields, comments, links, subtasks and
