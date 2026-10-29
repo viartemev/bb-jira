@@ -97,9 +97,9 @@ test("Server quick filters use GreenHopper only when the Agile endpoint is absen
   const paths: string[] = [];
   const c = new JiraClient(settings, (async input => {
     const url = new URL(String(input)); paths.push(url.pathname);
-    return url.pathname.includes("/agile/") ? new Response("Not found", { status: 404 }) : Response.json({ quickFilters: [{ id: 12, name: "Active", jql: "resolution = Unresolved", description: null }] });
+    return url.pathname.includes("/agile/") ? new Response("Not found", { status: 404 }) : Response.json({ quickFilters: [{ id: 12, name: "Active", query: "resolution = Unresolved", description: null }] });
   }) as typeof fetch);
-  assert.equal((await c.quickFilters(77)).filters[0].id, "12");
+  assert.deepEqual((await c.quickFilters(77)).filters[0], { id: "12", name: "Active", jql: "resolution = Unresolved", description: "" });
   assert.deepEqual(paths, ["/jira/rest/agile/1.0/board/77/quickfilter", "/jira/rest/greenhopper/1.0/quickfilters/77"]);
   const unavailable = new JiraClient(settings, (async () => new Response("Not found", { status: 404 })) as typeof fetch);
   assert.deepEqual(await unavailable.quickFilters(77), { available: false, filters: [] });

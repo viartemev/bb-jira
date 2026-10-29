@@ -88,8 +88,9 @@ export class JiraClient {
   async quickFilters(boardId: number, signal?: AbortSignal): Promise<{ filters: QuickFilter[]; available: boolean }> {
     const parse = (rows: unknown): QuickFilter[] => z.array(z.object({
       id: z.union([z.number().int().positive(), z.string().min(1)]).transform(String),
-      name: z.string(), jql: z.string(), description: z.string().nullish().transform(v => v ?? ""),
-    })).parse(rows);
+      name: z.string(), jql: z.string().optional(), query: z.string().optional(), description: z.string().nullish().transform(v => v ?? ""),
+    }).refine(value => value.jql !== undefined || value.query !== undefined, "Quick filter has no JQL query")
+      .transform(({ query, ...value }) => ({ ...value, jql: value.jql ?? query! }))).parse(rows);
     try {
       const filters: QuickFilter[] = [];
       let startAt = 0;
