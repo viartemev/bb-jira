@@ -47,5 +47,24 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/viartemev/bb-jira.git"
-  }
+  },
+  "description": "Browse Jira boards, bring issues into BB chats, and give agents authenticated Jira tools.",
+  "license": "MIT",
+  "author": "viartemev",
+  "homepage": "https://github.com/viartemev/bb-jira#readme",
+  "bugs": {
+    "url": "https://github.com/viartemev/bb-jira/issues"
+  },
+  "keywords": [
+    "bb",
+    "bb-plugin",
+    "jira",
+    "jira-plugin",
+    "atlassian",
+    "ai-agents",
+    "coding-agents",
+    "kanban",
+    "jql",
+    "personal-access-token"
+  ]
 }
