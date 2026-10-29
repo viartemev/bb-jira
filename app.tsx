@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { definePluginApp, useRpc, useComposer, useBbNavigate } from "@get-bb/plugin-sdk/app";
+import { definePluginApp, useRpc, useComposer, useBbNavigate, experimental_promptMentionClipboardAttributes } from "@get-bb/plugin-sdk/app";
+import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
 import type { Detail, Issue } from "./jira";
 import { Button } from "./components/ui/button";
@@ -9,7 +10,18 @@ type Board = { id: number; name: string; type: string };
 type Column = { name: string; statusIds: string[] };
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-export function JiraPanel() {
+export function dragIssue(event: DragEvent, issue: Issue) {
+  const pill = document.createElement("span");
+  const text = `@${issue.key}`;
+  const attributes = experimental_promptMentionClipboardAttributes({ kind: "plugin", pluginId: "jira", provider: "issue", id: issue.key, label: issue.key }, text);
+  for (const [name, value] of Object.entries(attributes)) pill.setAttribute(name, value);
+  pill.textContent = text;
+  event.dataTransfer.effectAllowed = "copy";
+  event.dataTransfer.setData("text/html", pill.outerHTML);
+  event.dataTransfer.setData("text/plain", text);
+}
+
+export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const rpc = useRpc<typeof rpcContract>();
   const composer = useComposer();
   const navigate = useBbNavigate();
@@ -89,10 +101,10 @@ export function JiraPanel() {
   const grouped = columns.map(c => ({ ...c, items: issues.filter(i => c.statusIds.includes(i.statusId)) }));
   const unmapped = issues.filter(i => !columns.some(c => c.statusIds.includes(i.statusId)));
   if (unmapped.length || !grouped.length) grouped.push({ name: columns.length ? "Other statuses" : "Issues", statusIds: [], items: unmapped });
-  return <div className="h-full overflow-auto bg-background text-foreground p-4 space-y-4">
+  return <div className={`h-full min-h-0 overflow-auto bg-background text-foreground space-y-3 ${compact ? "p-2" : "p-4"}`}>
     <div className="flex flex-wrap gap-2 items-center">
       <label className="text-sm" htmlFor="jira-board">Board</label>
-      <select id="jira-board" className="rounded-md border border-border bg-background p-2 text-sm max-w-full" value={boardId ?? ""} onChange={e => setBoardId(Number(e.target.value))}>
+      <select id="jira-board" className="rounded-md border border-border bg-background p-2 text-sm max-w-full min-w-0" value={boardId ?? ""} onChange={e => setBoardId(Number(e.target.value))}>
         {!boards.length && <option value="">No boards loaded</option>}
         {boards.map(b => <option key={b.id} value={b.id}>{b.name} · {b.id}</option>)}
       </select>
@@ -137,11 +149,11 @@ export function JiraPanel() {
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
     {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira, then refresh.</p>}
     {boardId && <>
-      <p className="text-xs text-muted-foreground">Loaded {issues.length} of {total} issues. Add a ticket to your draft or mention it with @ in chat.</p>
-      <div className="flex gap-3 overflow-x-auto pb-3">
-        {grouped.map((c, idx) => <section key={idx} className="min-w-64 w-72 shrink-0 rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+      <p className="text-xs text-muted-foreground">Loaded {issues.length} of {total} issues. Drag a ticket into the message box or use Add to chat.</p>
+      <div className={compact ? "space-y-3" : "flex gap-3 overflow-x-auto pb-3"}>
+        {grouped.map((c, idx) => <section key={idx} className={`rounded-lg border border-border bg-muted/30 p-3 space-y-2 ${compact ? "min-w-0" : "min-w-64 w-72 shrink-0"}`}>
           <h2 className="text-sm font-medium">{c.name} <span className="text-muted-foreground">{c.items.length}</span></h2>
-          {c.items.map(i => <article key={i.key} className="rounded-md border border-border bg-card p-3 space-y-2">
+          {c.items.map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="rounded-md border border-border bg-card p-3 space-y-2 cursor-grab active:cursor-grabbing">
             <button className="text-left w-full text-sm space-y-1" onClick={() => void openIssue(i.key)}>
               <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
               <span className="block text-xs text-muted-foreground">{i.assignee} · {i.status}</span>
@@ -157,8 +169,16 @@ export function JiraPanel() {
   </div>;
 }
 
+export function JiraSidebar({ dismiss }: { dismiss: () => void }) {
+  return <section aria-label="Jira boards" className="flex min-h-0 flex-col overflow-hidden" style={{ height: "65vh", maxHeight: "600px" }}>
+    <div className="flex shrink-0 items-center justify-between px-2 py-1">
+      <h2 className="text-sm font-medium">Jira</h2>
+      <Button variant="ghost" size="sm" onClick={dismiss}>Close Jira</Button>
+    </div>
+    <JiraPanel compact />
+  </section>;
+}
+
 export default definePluginApp(app => {
-  app.slots.navPanel({ id: "boards", title: "Jira", icon: "PanelsTopLeft", path: "boards", component: JiraPanel });
-  app.slots.experimental_tab({ id: "jira", title: "Jira", icon: "PanelsTopLeft", context: { kind: "thread" }, availability: "action", component: JiraPanel });
-  app.slots.experimental_newThreadPanelAction({ id: "jira", title: "Jira", icon: "PanelsTopLeft", component: JiraPanel });
+  app.experimental_sidebarFooter.register({ kind: "disclosure", id: "boards", label: "Jira boards", icon: "jira/mark", component: JiraSidebar });
 });

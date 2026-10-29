@@ -16,14 +16,16 @@ An independent community plugin for BB. Not affiliated with Atlassian.
 
 ## What you get
 
-- **Boards alongside chat:** a Jira sidebar entry and a panel in existing and
-  new threads, with configured board columns and issue cards.
+- **Boards alongside chat:** a collapsible Jira section in the sidebar footer,
+  with configured board columns and issue cards. Opening it keeps your conversation visible.
 - **JQL filters and pagination:** narrow a board to your work and load more
   issues as needed.
 - **Issue details:** descriptions, custom fields, comments, links, subtasks and
   attachment metadata. Open tickets by key or Jira browse URL.
 - **Add to chat:** insert a Jira mention without replacing your draft. BB
   fetches the current issue context when you send the message.
+- **Drag to chat:** drag a ticket from the sidebar into the message box to
+  insert a Jira mention at the drop position.
 - **@ mentions:** search for Jira tickets directly from the composer.
 - **Agent access:** four native tools, a CLI and a bundled skill for reading
   issues and boards with stored credentials.
@@ -62,7 +64,8 @@ Open **Settings → Plugins → Jira** and fill in:
 | Board IDs | Comma-separated IDs such as `17, 42`; empty lists all accessible boards |
 
 Find board IDs in Jira board URLs, for example `rapidView=17` or `/boards/17`.
-Open **Jira** in the BB sidebar and click **Test connection**, then **Refresh**.
+Click the **Jira boards** diamond icon at the bottom of the BB sidebar and
+click **Test connection**, then **Refresh**.
 Settings take effect on the next request; no plugin reload is needed.
 
 **Never paste a token into a chat, issue report or shell command.** BB stores
@@ -86,14 +89,15 @@ with the deployment type and version, without private ticket data.
 
 ### From a board
 
-Open **Jira**, select a board, and click a card to inspect it. Use **Add to
-chat** to place the ticket in the message draft, then add your request:
+Open **Jira boards** in the sidebar footer, select a board, and click a card
+to inspect it. Drag a card into the message box or use **Add to chat** to
+place the ticket in the message draft, then add your request:
 
 > Investigate the bug, explain the cause, and propose a fix.
 
 Sending the message resolves the Jira mention into fresh issue context. The
-plugin does not send a message automatically. In an existing thread, open
-**Jira** from the panel's new-tab menu to keep the board beside the conversation.
+plugin does not send a message automatically. The sidebar stays beside your
+current conversation; **Close Jira** collapses it without navigating away.
 
 **New chat** opens a draft asking the selected agent to read the issue.
 
@@ -151,7 +155,8 @@ reject redirects, time out after 20 seconds, and cap upstream responses at
 ## Limitations
 
 - No status changes, comments, assignments or other Jira writes.
-- Use **Add to chat** or **@** mentions; dragging cards is not implemented.
+- Drag cards into the message box on desktop; **Add to chat** and **@**
+  mentions also work without dragging, including on touch devices.
 - Initial context includes all returned fields, the first 50 comments, links,
   subtasks and attachment metadata, capped at 48k characters with an explicit
   truncation notice. Agents can request more comment pages or individual fields.

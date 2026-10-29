@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Replace the standalone Jira page and panel launchers with a collapsible
+  sidebar footer section that keeps the current conversation open.
+- Drag issue cards into the composer as native Jira mentions.
+- Use a distinct Jira-inspired diamond icon throughout BB.
+
 ## 0.1.0 — 2026-10-29
 
 Initial release.
