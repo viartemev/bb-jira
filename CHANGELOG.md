@@ -2,6 +2,18 @@
 
 Release notes are generated from the merged pull requests when a version tag is pushed.
 
+## 0.2.1 — 2026-10-30
+
+<!-- Release notes generated using configuration in .github/release.yml at v0.2.1 -->
+
+### What's Changed
+### Other changes
+* Harden @ search, use versioned myself endpoint, keep ADF code and tab… by @viartemev in https://github.com/viartemev/bb-jira/pull/10
+* Ci/automated release by @viartemev in https://github.com/viartemev/bb-jira/pull/11
+
+
+**Full Changelog**: https://github.com/viartemev/bb-jira/compare/v0.2.0...v0.2.1
+
 ## 0.2.0 — 2026-10-29
 
 - The plugin now installs as **Jira Boards** (`jira-boards`) instead of `jira`,
