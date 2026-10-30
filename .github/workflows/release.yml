@@ -1,29 +1,73 @@
 name: Release
+# Push a tag such as v0.2.1 and nothing else: this workflow checks the code,
+# writes the version and changelog from the merged pull requests, commits them
+# to main, moves the tag onto that commit, and publishes the GitHub release.
 on:
   push:
     tags: ["v*"]
 permissions:
   contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - name: Tag must match package.json version
+      - name: The tag must be a version on the tip of main
         run: |
-          version="$(node -p "require('./package.json').version")"
-          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$TAG is not a version tag such as v1.2.3"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "::error::$TAG is not the latest commit on main. Merge your work, then tag main."; exit 1; }
       - run: npm ci --include=dev
       - run: npm run typecheck
       - run: npm test
+      - name: Generate release notes from merged pull requests
+        run: |
+          previous="$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)"
+          args=(-f tag_name="$TAG")
+          [ -n "$previous" ] && args+=(-f previous_tag_name="$previous")
+          gh api -X POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body > release-notes.md
+          cat release-notes.md
+      - name: Write the version and changelog
+        run: |
+          npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+          npx tsx scripts/changelog.ts "$TAG" release-notes.md
+      - name: Commit to main and move the tag onto the release commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "Release $TAG"
+          git push origin HEAD:main
+          git tag -f -a "$TAG" -m "Release $TAG"
+          git push -f origin "refs/tags/$TAG"
       - name: Package the plugin source
-        run: git archive --format=tar.gz --prefix=bb-jira-boards-${GITHUB_REF_NAME}/ -o bb-jira-boards-${GITHUB_REF_NAME}.tar.gz HEAD
+        run: git archive --format=tar.gz --prefix=bb-jira-boards-${TAG}/ -o bb-jira-boards-${TAG}.tar.gz HEAD
       - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "bb-jira-boards-${GITHUB_REF_NAME}.tar.gz" --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" "bb-jira-boards-${TAG}.tar.gz" --verify-tag --title "$TAG" --notes-file release-notes.md $flags
+      - name: Check the marketplace range
+        # The marketplace entry tracks tags by semver range; a release outside it
+        # needs a pull request to get-bb/marketplace. This only reports, never fails.
+        run: |
+          version="${TAG#v}"
+          range="$(curl -fsS https://raw.githubusercontent.com/get-bb/marketplace/main/entries/jira-boards.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).source.git.range))')" || { echo "Could not read the marketplace entry." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          if npx --yes semver -r "$range" "$version" > /dev/null; then
+            echo "Marketplace range \`$range\` includes $version: users can update with \`bb plugin update jira-boards --yes\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::$version is outside the marketplace range $range. Open a PR to get-bb/marketplace changing entries/jira-boards.json."
+            echo "**Marketplace PR needed:** $version is outside \`$range\`. Update \`source.git.range\` in \`entries/jira-boards.json\`." >> "$GITHUB_STEP_SUMMARY"
+          fi

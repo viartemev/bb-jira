@@ -1,5 +1,7 @@
 # Changelog
 
+Release notes are generated from the merged pull requests when a version tag is pushed.
+
 ## 0.2.0 — 2026-10-29
 
 - The plugin now installs as **Jira Boards** (`jira-boards`) instead of `jira`,

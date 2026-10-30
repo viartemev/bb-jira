@@ -27,3 +27,7 @@ Update README.md, PLUGIN_OVERVIEW.md and CHANGELOG.md when behavior changes.
 
 GitHub Actions runs TypeScript checks and tests. The frontend/backend bundle
 build is verified separately with the installed BB CLI before a release.
+
+Use a clear pull request title for every change and, where it fits, a label
+(`enhancement`, `bug`, `dependencies`): releases build the changelog from them.
+CHANGELOG.md is written by the Release workflow; do not edit it by hand.

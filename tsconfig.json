@@ -27,6 +27,7 @@
     "settings.tsx",
     "components",
     "lib",
+    "scripts",
     "tests"
   ]
 }
