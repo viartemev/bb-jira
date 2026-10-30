@@ -238,16 +238,18 @@ bb plugin build
 
 GitHub Actions runs on every push to `main` and every pull request: type checking, the test suite, and a production dependency audit (`npm audit --omit=dev --audit-level=high`). Dependabot proposes weekly npm and Actions updates.
 
-To publish a release, describe the changes under `## Unreleased` in `CHANGELOG.md` while you work, merge to `main`, then run:
+To publish a release, merge your pull requests into `main` and push a version tag on its latest commit:
 
 ```sh
-npm run release -- 0.2.1
-git push origin main v0.2.1
+git checkout main && git pull
+git tag v0.2.1 && git push origin v0.2.1
 ```
 
-`npm run release` bumps `version` in `package.json`, dates the `Unreleased` section, commits, and tags `v0.2.1`; it never pushes. The pushed tag starts the Release workflow, which refuses a tag that differs from `package.json` or is not on `main`, reruns type checking and tests, takes the release notes from the matching changelog section (plus GitHub's generated notes), attaches a source archive, and creates the GitHub release. A version with a hyphen, such as `0.3.0-rc.1`, is marked as a pre-release.
+That is all. The Release workflow checks the tag is a version on the tip of `main`, runs type checking and tests, generates the notes from the merged pull requests since the previous tag (grouped by label through `.github/release.yml`), sets `version` in `package.json`, adds a section to `CHANGELOG.md`, commits both to `main` as `Release v0.2.1`, moves the tag onto that commit so an install from the tag reports the right version, attaches a source archive, and creates the GitHub release. A version with a hyphen, such as `0.3.0-rc.1`, becomes a pre-release. Write clear pull request titles: they are the changelog.
 
 The workflow summary also says whether the version is inside the marketplace range. Releases inside it reach users with `bb plugin update jira-boards --yes`; for one outside it (for example `0.3.0` against `^0.2.0`), open a pull request to [get-bb/marketplace](https://github.com/get-bb/marketplace) changing `source.git.range` in `entries/jira-boards.json`.
+
+The workflow pushes to `main` as `github-actions[bot]`, so it needs branch protection to allow that; if it does not, the run fails before anything is published.
 
 Tests cover authentication, pagination, bounded context, input validation, native drag-and-drop handling, mention insertion, and connection settings using fixtures and BB's public SDK harness.
 

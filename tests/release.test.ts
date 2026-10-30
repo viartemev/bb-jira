@@ -1,23 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractNotes, promoteUnreleased } from "../lib/release";
+import { addRelease } from "../lib/release";
 
-const log = "# Changelog\n\n## Unreleased\n\n- New thing.\n\n## 0.2.0 — 2026-10-29\n\n- Old thing.\n- Another.\n\n## 0.1.0 — 2026-10-29\n\nInitial release.\n";
+const log = "# Changelog\n\nIntro line.\n\n## 0.2.0 — 2026-10-29\n\n- Old thing.\n";
 
-test("extractNotes returns only the requested section", () => {
-  assert.equal(extractNotes(log, "0.2.0"), "- Old thing.\n- Another.");
-  assert.equal(extractNotes(log, "0.1.0"), "Initial release.");
-  assert.throws(() => extractNotes(log, "0.3.0"), /no section for 0\.3\.0/);
-  assert.throws(() => extractNotes("## 0.2.0\n\n## 0.1.0\nx", "0.2.0"), /empty/);
-  assert.throws(() => extractNotes(log, "0.2"), /no section/);
+test("addRelease puts the newest release first and keeps the intro", () => {
+  const out = addRelease(log, "0.2.1", "2026-11-01", "## What's Changed\n* Fix search by @a in #10\n\n**Full Changelog**: x");
+  assert.equal(out, "# Changelog\n\nIntro line.\n\n## 0.2.1 — 2026-11-01\n\n### What's Changed\n* Fix search by @a in #10\n\n**Full Changelog**: x\n\n## 0.2.0 — 2026-10-29\n\n- Old thing.\n");
 });
 
-test("promoteUnreleased dates the section and leaves a fresh one", () => {
-  const out = promoteUnreleased(log, "0.2.1", "2026-11-01");
-  assert.match(out, /## Unreleased\n\n## 0\.2\.1 — 2026-11-01\n\n- New thing\./);
-  assert.equal(extractNotes(out, "0.2.1"), "- New thing.");
-  assert.throws(() => promoteUnreleased(out, "0.2.2", "2026-11-02"), /Unreleased.*empty/);
-  assert.throws(() => promoteUnreleased(log, "0.2.0", "2026-11-01"), /already has/);
-  assert.throws(() => promoteUnreleased(log, "v1", "2026-11-01"), /semantic version/);
-  assert.throws(() => promoteUnreleased("# Changelog\n", "1.0.0", "2026-11-01"), /no "## Unreleased"/);
+test("addRelease works on a changelog without releases and rejects bad input", () => {
+  assert.equal(addRelease("# Changelog\n", "1.0.0", "2026-11-01", "- First."), "# Changelog\n\n## 1.0.0 — 2026-11-01\n\n- First.\n");
+  assert.throws(() => addRelease(log, "0.2.0", "2026-11-01", "- x"), /already has/);
+  assert.throws(() => addRelease(log, "v1", "2026-11-01", "- x"), /semantic version/);
+  assert.throws(() => addRelease(log, "0.3.0", "2026-11-01", "  \n"), /empty/);
 });

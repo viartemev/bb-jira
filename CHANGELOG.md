@@ -1,16 +1,6 @@
 # Changelog
 
-Add entries under **Unreleased** as you work. `npm run release -- X.Y.Z` dates
-that section, and the tag workflow publishes it as the release notes.
-
-## Unreleased
-
-- Free-text search in the @ menu ignores `-` and AND/OR/NOT, so they cannot act
-  as Jira text-search operators.
-- The connection test uses the versioned `myself` endpoint on Jira Cloud.
-- Cloud comments keep line breaks after code blocks and spaces between table cells.
-- Releases are automated: pushing a tag checks, packages and publishes it with
-  the matching changelog section.
+Release notes are generated from the merged pull requests when a version tag is pushed.
 
 ## 0.2.0 — 2026-10-29
 
