@@ -37,7 +37,7 @@ export function plainText(value: unknown): string {
   if (n.type === "mention") return n.attrs?.text ?? "";
   if (n.type === "inlineCard") return n.attrs?.url ?? "";
   const content = Array.isArray(n.content) ? n.content.map(plainText).join("") : "";
-  return (n.text ?? content) + (["paragraph", "heading", "listItem", "tableRow"].includes(n.type) ? "\n" : "");
+  return (n.text ?? content) + (["paragraph", "heading", "listItem", "tableRow", "codeBlock"].includes(n.type) ? "\n" : ["tableCell", "tableHeader"].includes(n.type) ? " " : "");
 }
 /** Jira Cloud (REST v3) rejects plain-text comment bodies, so wrap the text in a minimal ADF document. */
 export function adfBody(text: string): unknown {
@@ -104,6 +104,10 @@ export class JiraClient {
   }
   async get(path: string, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<any> {
     return this.send("GET", path, undefined, params, signal);
+  }
+  /** The account behind the saved token; Cloud serves it from v3, Server/Data Center from v2. */
+  async myself(signal?: AbortSignal) {
+    return this.get(`/rest/api/${this.version()}/myself`, {}, signal);
   }
   async boards(startAt = 0, signal?: AbortSignal) {
     const ids = parseBoardIds(this.settings.boardIds);
