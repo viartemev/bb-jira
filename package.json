@@ -45,7 +45,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "build": "bb plugin build"
+    "build": "bb plugin build",
+    "release": "tsx scripts/release.ts"
   },
   "repository": {
     "type": "git",

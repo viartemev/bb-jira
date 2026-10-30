@@ -238,13 +238,16 @@ bb plugin build
 
 GitHub Actions runs on every push to `main` and every pull request: type checking, the test suite, and a production dependency audit (`npm audit --omit=dev --audit-level=high`). Dependabot proposes weekly npm and Actions updates.
 
-To publish a release, move the `Unreleased` changelog entries under a new version, bump `version` in `package.json`, merge, then push a matching tag:
+To publish a release, describe the changes under `## Unreleased` in `CHANGELOG.md` while you work, merge to `main`, then run:
 
 ```sh
-git tag vX.Y.Z && git push origin vX.Y.Z
+npm run release -- 0.2.1
+git push origin main v0.2.1
 ```
 
-The Release workflow refuses a tag that differs from `package.json`, reruns type checking and tests, attaches a source archive, and creates the GitHub release with generated notes.
+`npm run release` bumps `version` in `package.json`, dates the `Unreleased` section, commits, and tags `v0.2.1`; it never pushes. The pushed tag starts the Release workflow, which refuses a tag that differs from `package.json` or is not on `main`, reruns type checking and tests, takes the release notes from the matching changelog section (plus GitHub's generated notes), attaches a source archive, and creates the GitHub release. A version with a hyphen, such as `0.3.0-rc.1`, is marked as a pre-release.
+
+The workflow summary also says whether the version is inside the marketplace range. Releases inside it reach users with `bb plugin update jira-boards --yes`; for one outside it (for example `0.3.0` against `^0.2.0`), open a pull request to [get-bb/marketplace](https://github.com/get-bb/marketplace) changing `source.git.range` in `entries/jira-boards.json`.
 
 Tests cover authentication, pagination, bounded context, input validation, native drag-and-drop handling, mention insertion, and connection settings using fixtures and BB's public SDK harness.
 

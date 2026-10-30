@@ -27,3 +27,6 @@ Update README.md, PLUGIN_OVERVIEW.md and CHANGELOG.md when behavior changes.
 
 GitHub Actions runs TypeScript checks and tests. The frontend/backend bundle
 build is verified separately with the installed BB CLI before a release.
+
+Add a line to `## Unreleased` in CHANGELOG.md for every user-visible change; releases
+are cut from that section (see the README, “Development”).
