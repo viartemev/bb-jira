@@ -51,7 +51,7 @@ export default async function plugin(bb: BbPluginApi) {
     add_comment: async ({ key, body }) => (await client()).addComment(key, body),
     transitions: async ({ key }) => (await client()).transitions(key),
     transition: async ({ key, transitionId, comment }) => (await client()).transition(key, transitionId, comment),
-    connection: async () => { const user = await (await client()).get("/rest/api/2/myself"); return { displayName: String(user.displayName ?? user.name ?? "Connected") }; },
+    connection: async () => { const user = await (await client()).myself(); return { displayName: String(user.displayName ?? user.name ?? "Connected") }; },
     credential_status: async () => ({ saved: Boolean((await settings.get()).pat), cloud: (await mode.get()).authMode === "cloud" }),
     refresh_boards: async () => { bb.realtime.publish("boards-refresh-requested", {}); return null; },
   });
@@ -79,7 +79,8 @@ export default async function plugin(bb: BbPluginApi) {
       const q = query.trim(); if (q.length < 2 || q.length > 100) return [];
       const c = await client(); const key = keySchema.safeParse(q);
       if (key.success) { const d = await c.detail(key.data); return [{ id: d.issue.key, title: `${d.issue.key} ${d.issue.summary}`, subtitle: d.issue.status }]; }
-      const safe = q.replace(/[^\p{L}\p{N} _-]/gu, " ").trim(); if (!safe) return [];
+      // Keep only plain words: `-` and AND/OR/NOT are operators in Jira's text-search syntax.
+      const safe = q.replace(/[^\p{L}\p{N} _]/gu, " ").split(/\s+/).filter(w => w && !/^(AND|OR|NOT)$/i.test(w)).join(" "); if (!safe) return [];
       return (await c.search(`text ~ "${safe}" ORDER BY updated DESC`)).slice(0, 10).map(i => ({ id: i.key, title: `${i.key} ${i.summary}`, subtitle: i.status }));
     }, resolve: async key => ({ context: issueContext(await (await client()).detail(key)) }),
   });
