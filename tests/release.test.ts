@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addRelease } from "../lib/release";
+import { addRelease, tidyNotes } from "../lib/release";
 
 const log = "# Changelog\n\nIntro line.\n\n## 0.2.0 — 2026-10-29\n\n- Old thing.\n";
 
@@ -14,4 +14,10 @@ test("addRelease works on a changelog without releases and rejects bad input", (
   assert.throws(() => addRelease(log, "0.2.0", "2026-11-01", "- x"), /already has/);
   assert.throws(() => addRelease(log, "v1", "2026-11-01", "- x"), /semantic version/);
   assert.throws(() => addRelease(log, "0.3.0", "2026-11-01", "  \n"), /empty/);
+});
+
+test("tidyNotes removes the generator comment and a redundant heading", () => {
+  const raw = "<!-- Release notes generated using configuration in .github/release.yml at v1 -->\n\n## What's Changed\n### Other changes\n* A by @a in #1\n\n\n**Full Changelog**: x\n";
+  assert.equal(tidyNotes(raw), "### Other changes\n* A by @a in #1\n\n**Full Changelog**: x");
+  assert.equal(tidyNotes("## What's Changed\n* A in #1"), "## What's Changed\n* A in #1");
 });
