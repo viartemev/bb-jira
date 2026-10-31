@@ -36,8 +36,25 @@ export function plainText(value: unknown): string {
   if (n.type === "hardBreak") return "\n";
   if (n.type === "mention") return n.attrs?.text ?? "";
   if (n.type === "inlineCard") return n.attrs?.url ?? "";
+  if (n.type === "text") {
+    const href = Array.isArray(n.marks) ? n.marks.find((m: any) => m?.type === "link")?.attrs?.href : undefined;
+    return href && href !== n.text ? `${n.text ?? ""} (${href})` : n.text ?? "";
+  }
+  if (n.type === "emoji") return n.attrs?.text || n.attrs?.shortName || "";
+  if (n.type === "status") return n.attrs?.text ? `[${n.attrs.text}]` : "";
+  if (n.type === "date") { const t = Number(n.attrs?.timestamp); return t > 0 ? new Date(t).toISOString().slice(0, 10) : ""; }
+  if (n.type === "media") return `[attachment${n.attrs?.alt ? `: ${n.attrs.alt}` : ""}]`;
+  if (n.type === "rule") return "---\n";
+  if (n.type === "bulletList" || n.type === "orderedList") {
+    // Each item gets its marker; continuation lines and nested lists are indented under it.
+    const start = Number(n.attrs?.order ?? 1) || 1;
+    return (Array.isArray(n.content) ? n.content : []).map((item: unknown, i: number) => {
+      const marker = n.type === "orderedList" ? `${start + i}. ` : "- ";
+      return marker + plainText(item).replace(/\n+$/, "").replace(/\n/g, `\n${" ".repeat(marker.length)}`) + "\n";
+    }).join("");
+  }
   const content = Array.isArray(n.content) ? n.content.map(plainText).join("") : "";
-  return (n.text ?? content) + (["paragraph", "heading", "listItem", "tableRow", "codeBlock"].includes(n.type) ? "\n" : ["tableCell", "tableHeader"].includes(n.type) ? " " : "");
+  return (n.text ?? content) + (["paragraph", "heading", "tableRow", "codeBlock", "mediaSingle", "mediaGroup"].includes(n.type) ? "\n" : ["tableCell", "tableHeader"].includes(n.type) ? " " : "");
 }
 /** Jira Cloud (REST v3) rejects plain-text comment bodies, so wrap the text in a minimal ADF document. */
 export function adfBody(text: string): unknown {
