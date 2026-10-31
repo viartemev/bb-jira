@@ -1,6 +1,6 @@
 import { defineRpcContract, defineCli, cliCommand, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { JiraClient, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, commentBodySchema, commentSchema, transitionIdSchema, transitionResultSchema, transitionSchema, type JiraSettings } from "./jira";
+import { JiraClient, JiraHttpError, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, commentBodySchema, commentSchema, transitionIdSchema, transitionResultSchema, transitionSchema, type JiraSettings } from "./jira";
 
 const boardInput = pageSchema.extend({ boardId: z.number().int().positive(), jql: z.string().max(4000).default("") });
 export const rpcContract = defineRpcContract({
@@ -78,7 +78,11 @@ export default async function plugin(bb: BbPluginApi) {
     async search({ query }) {
       const q = query.trim(); if (q.length < 2 || q.length > 100) return [];
       const c = await client(); const key = keySchema.safeParse(q);
-      if (key.success) { const d = await c.detail(key.data); return [{ id: d.issue.key, title: `${d.issue.key} ${d.issue.summary}`, subtitle: d.issue.status }]; }
+      if (key.success) {
+        // A key that does not exist, or is hidden from this account, is simply no match.
+        const issue = await c.issue(key.data).catch(e => { if (e instanceof JiraHttpError && e.status === 404) return null; throw e; });
+        return issue ? [{ id: issue.key, title: `${issue.key} ${issue.summary}`, subtitle: issue.status }] : [];
+      }
       // Keep only plain words: `-` and AND/OR/NOT are operators in Jira's text-search syntax.
       const safe = q.replace(/[^\p{L}\p{N} _]/gu, " ").split(/\s+/).filter(w => w && !/^(AND|OR|NOT)$/i.test(w)).join(" "); if (!safe) return [];
       return (await c.search(`text ~ "${safe}" ORDER BY updated DESC`)).slice(0, 10).map(i => ({ id: i.key, title: `${i.key} ${i.summary}`, subtitle: i.status }));

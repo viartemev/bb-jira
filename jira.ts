@@ -8,7 +8,7 @@ export type Issue = z.infer<typeof issueSchema>;
 export const columnSchema = z.object({ name: z.string(), statusIds: z.array(z.string()) });
 export const quickFilterSchema = z.object({ id: z.string().min(1), name: z.string(), jql: z.string(), description: z.string() });
 export type QuickFilter = z.infer<typeof quickFilterSchema>;
-class JiraHttpError extends Error {
+export class JiraHttpError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
@@ -58,7 +58,7 @@ export function normalizeBaseUrl(value: string): string {
 export class JiraClient {
   readonly baseUrl: string;
   constructor(private settings: JiraSettings, private request: typeof fetch = fetch) {
-    if (!settings.baseUrl || !settings.pat) throw new Error("Configure Jira URL and PAT in Settings → Plugins → Jira.");
+    if (!settings.baseUrl || !settings.pat) throw new Error("Configure Jira URL and PAT in Settings → Plugins → Jira Boards.");
     this.baseUrl = normalizeBaseUrl(settings.baseUrl);
     if (settings.authMode === "cloud" && !settings.email) throw new Error("Jira Cloud requires an account email.");
   }
@@ -151,6 +151,11 @@ export class JiraClient {
   summary(raw: any): Issue {
     const f = raw.fields ?? {};
     return { key: String(raw.key), summary: f.summary ?? "", status: f.status?.name ?? "Unknown", statusId: String(f.status?.id ?? ""), assignee: f.assignee?.displayName ?? "Unassigned", assigneeId: f.assignee?.accountId ?? f.assignee?.key ?? f.assignee?.name ?? f.assignee?.displayName ?? "", priority: f.priority?.name ?? "", type: f.issuetype?.name ?? "", url: `${this.baseUrl}/browse/${encodeURIComponent(raw.key)}` };
+  }
+  /** Key, summary and status only: enough for a suggestion, without all fields and comments. */
+  async issue(key: string, signal?: AbortSignal): Promise<Issue> {
+    key = keySchema.parse(key);
+    return this.summary(await this.get(`/rest/api/${this.version()}/issue/${key}`, { fields: "summary,status,assignee,priority,issuetype" }, signal));
   }
   async issues(boardId: number, jql: string, startAt: number, signal?: AbortSignal) {
     const data = await this.get(`/rest/agile/1.0/board/${boardId}/issue`, { jql, startAt, maxResults: 50, fields: "summary,status,assignee,priority,issuetype" }, signal);
