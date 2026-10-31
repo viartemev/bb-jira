@@ -48,6 +48,37 @@ test("issue detail carries custom fields, links, attachment metadata and paginat
   d.description = "x".repeat(100_000);
   assert.ok(issueContext(d).length < 49_000); assert.match(issueContext(d), /truncated/);
 });
+test("issue context drops empty and duplicated fields, names custom fields and asks for the newest comments", async () => {
+  const requests: URL[] = [];
+  const raw = { ...rawIssue, names: { customfield_123: "Definition of done", customfield_999: "Unused", status: "Status" }, fields: { ...rawIssue.fields, description: "Only once", customfield_999: null, customfield_5: [], customfield_6: "", customfield_7: {}, status: { self: "https://jira.example.test/rest/api/2/status/2", iconUrl: "https://jira.example.test/i.png", id: "2", name: "In progress" } } };
+  const c = new JiraClient(settings, fake(url => { requests.push(url); return url.pathname.endsWith("/comment") ? { comments: [], total: 0 } : raw; }));
+  const d = await c.detail("APP-7");
+  assert.equal(requests.find(u => u.pathname.endsWith("/APP-7"))?.searchParams.get("expand"), "names");
+  assert.equal(requests.find(u => u.pathname.endsWith("/comment"))?.searchParams.get("orderBy"), "-created");
+  assert.deepEqual(Object.keys(d.fields).filter(k => k.startsWith("customfield_")), ["customfield_123"]);
+  assert.deepEqual(d.fieldNames, { customfield_123: "Definition of done", status: "Status" });
+  const context = issueContext(d);
+  assert.match(context, /"Definition of done \(customfield_123\)":"Acceptance criteria"/);
+  assert.equal(context.split("Only once").length, 2);
+  assert.ok(!context.includes("iconUrl") && !context.includes("/rest/api/2/status/2"));
+  assert.match(context, /newest 0 of 0, newest first/);
+});
+test("a single field is read by ID or by name without fetching the whole issue", async () => {
+  const requests: URL[] = [];
+  const c = new JiraClient(settings, fake(url => {
+    requests.push(url);
+    if (url.pathname.endsWith("/rest/api/2/field")) return [{ id: "summary", name: "Summary" }, { id: "customfield_10020", name: "Sprint" }];
+    const id = url.searchParams.get("fields")!;
+    return { key: "APP-7", names: { customfield_10020: "Sprint" }, fields: id === "customfield_10020" ? { customfield_10020: [{ name: "Sprint 4" }] } : {} };
+  }));
+  assert.deepEqual(await c.field("APP-7", "customfield_10020"), { id: "customfield_10020", name: "Sprint", value: [{ name: "Sprint 4" }] });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].searchParams.get("fields"), "customfield_10020");
+  requests.length = 0;
+  assert.deepEqual(await c.field("APP-7", "sprint"), { id: "customfield_10020", name: "Sprint", value: [{ name: "Sprint 4" }] });
+  assert.deepEqual(requests.map(u => u.searchParams.get("fields") ?? u.pathname), ["sprint", "/jira/rest/api/2/field", "customfield_10020"]);
+  assert.deepEqual(await c.field("APP-7", "No such field"), { id: "No such field", name: "No such field", value: null });
+});
 test("board issue pagination and multi-status column mapping", async () => {
   const c = new JiraClient(settings, fake(url => {
     if (url.pathname.endsWith("/configuration")) return { columnConfig: { columns: [{ name: "Doing", statuses: [{ id: "2" }, { id: "3" }] }] } };
