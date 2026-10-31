@@ -11,6 +11,9 @@ import { CredentialStatus } from "./settings";
 
 type Board = { id: number; name: string; type: string };
 type Column = { name: string; statusIds: string[] };
+type IssuePage = { issues: Issue[]; startAt: number; total: number; next: number | null };
+/** Tasks loaded before the board stops and offers "Load more": a board full of old done work would otherwise take hundreds of requests. */
+export const boardTaskLimit = 1000;
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 export function dragIssue(event: DragEvent, issue: Issue) {
@@ -25,7 +28,7 @@ export function dragIssue(event: DragEvent, issue: Issue) {
   event.dataTransfer.setData("text/plain", text);
 }
 
-export function JiraPanel({ compact = false }: { compact?: boolean }) {
+export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { compact?: boolean; taskLimit?: number }) {
   const rpc = useRpc<typeof rpcContract>();
   const composer = useComposer();
   const navigate = useBbNavigate();
@@ -55,6 +58,8 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState("");
   const [refreshId, setRefreshId] = useState(0);
+  const [moreAt, setMoreAt] = useState<number | null>(null);
+  const collected = useRef(new Map<string, Issue>());
   useRealtime("boards-refresh-requested", () => { void loadBoards(); setRefreshId(id => id + 1); });
   useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
   const boardGeneration = useRef(0);
@@ -82,9 +87,23 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
     }, () => { if (active) setFilterWarning("Could not load board quick filters. You can still use JQL; refresh to retry."); });
     return () => { active = false; };
   }, [rpc, boardId, refreshId]);
+  /** Follow task pages until Jira runs out or another `taskLimit` tasks are loaded; the rest wait for "Load more tasks". */
+  async function loadTasks(selectedBoard: number, query: string, first: IssuePage, generation: number) {
+    const active = () => generation === boardGeneration.current;
+    const stopAt = collected.current.size + taskLimit;
+    let page = first;
+    while (active()) {
+      for (const issue of page.issues) collected.current.set(issue.key, issue);
+      setIssues([...collected.current.values()]); setTotal(page.total);
+      if (page.next === null) break;
+      if (page.next <= page.startAt) throw new Error("Jira returned a non-advancing task page. Refresh the board to retry.");
+      if (collected.current.size >= stopAt) { setMoreAt(page.next); break; }
+      page = await rpc.call("issues", { boardId: selectedBoard, jql: query, startAt: page.next });
+    }
+  }
   useEffect(() => {
     const generation = ++boardGeneration.current;
-    setIssues([]); setColumns([]); setTotal(0);
+    collected.current = new Map(); setIssues([]); setColumns([]); setTotal(0); setMoreAt(null);
     if (!boardId) return;
     setBusy(true); setError("");
     const selectedBoard = boardId;
@@ -94,20 +113,21 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         const [cols, first] = await Promise.all([rpc.call("columns", { boardId: selectedBoard }), rpc.call("issues", { boardId: selectedBoard, jql: effectiveJql, startAt: 0 })]);
         if (!active()) return;
         setColumns(cols);
-        let page = first;
-        const collected = new Map<string, Issue>();
-        while (active()) {
-          for (const issue of page.issues) collected.set(issue.key, issue);
-          setIssues([...collected.values()]); setTotal(page.total);
-          if (page.next === null) break;
-          if (page.next <= page.startAt) throw new Error("Jira returned a non-advancing task page. Refresh the board to retry.");
-          page = await rpc.call("issues", { boardId: selectedBoard, jql: effectiveJql, startAt: page.next });
-        }
+        await loadTasks(selectedBoard, effectiveJql, first, generation);
       } catch (e) { if (active()) setError(message(e)); }
       finally { if (active()) setBusy(false); }
     })();
     return () => { boardGeneration.current++; };
   }, [rpc, boardId, effectiveJql, refreshId]);
+  async function loadMoreTasks() {
+    if (moreAt === null || !boardId || busy) return;
+    const generation = boardGeneration.current;
+    const selectedBoard = boardId;
+    setMoreAt(null); setBusy(true); setError("");
+    try { await loadTasks(selectedBoard, effectiveJql, await rpc.call("issues", { boardId: selectedBoard, jql: effectiveJql, startAt: moreAt }), generation); }
+    catch (e) { if (generation === boardGeneration.current) setError(message(e)); }
+    finally { if (generation === boardGeneration.current) setBusy(false); }
+  }
   async function openIssue(issueKey: string) {
     const generation = ++detailGeneration.current;
     setLoadingDetail(true); setDetail(null); setError(""); setNotice(""); setWriteError("");
@@ -268,7 +288,12 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{issues.length} of {total} tasks</span>
+        <span className="flex items-center gap-2">{issues.length} of {total} tasks
+          {moreAt !== null && !busy && <>
+            <span>· Narrow the board with JQL or a quick filter, or</span>
+            <Button size="sm" variant="ghost" onClick={() => void loadMoreTasks()}>Load more tasks</Button>
+          </>}
+        </span>
         <span>{busy ? "Loading all tasks…" : "Grouped by assignee"}</span>
       </div>
     </>}
