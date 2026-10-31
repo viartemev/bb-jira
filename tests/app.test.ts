@@ -149,7 +149,8 @@ test("issue detail writes a comment and moves the ticket through a transition", 
     await slot.findByText("Steps");
     const select = await slot.findByLabelText("Move issue to another status") as HTMLSelectElement;
     await slot.findByRole("option", { name: "Start progress → In progress" });
-    fireEvent.change(select, { target: { value: "31" } });
+    assert.equal(select.value, "");
+    assert.equal((slot.getByRole("button", { name: "Move" }) as HTMLButtonElement).disabled, true);
     const box = slot.getByLabelText("Write a comment") as HTMLTextAreaElement;
     assert.equal(box.maxLength, 32767);
     fireEvent.change(box, { target: { value: "привет" } });
@@ -157,6 +158,8 @@ test("issue detail writes a comment and moves the ticket through a transition", 
     await slot.findByText("APP-7: comment added.");
     assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "add_comment").map(call => call.input), [{ key: "APP-7", body: "привет" }]);
     assert.equal((slot.getByLabelText("Write a comment") as HTMLTextAreaElement).value, "");
+    await slot.findByRole("option", { name: "Start progress → In progress" });
+    fireEvent.change(slot.getByLabelText("Move issue to another status"), { target: { value: "31" } });
     fireEvent.click(slot.getByRole("button", { name: "Move" }));
     await slot.findByText("APP-7: status is now In progress.");
     assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "transition").map(call => call.input), [{ key: "APP-7", transitionId: "31" }]);

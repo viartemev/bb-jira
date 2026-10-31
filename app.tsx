@@ -122,8 +122,8 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
       try {
         const items = await rpc.call("transitions", { key: d.issue.key });
         if (generation !== detailGeneration.current) return;
+        // No transition is pre-selected: moving a ticket must be a deliberate choice.
         setTransitions({ key: d.issue.key, items });
-        setTransitionId(items[0]?.id ?? "");
       } catch {
         // Workflow transitions need extra permissions on some setups; the issue itself still opens.
         if (generation === detailGeneration.current) setTransitions({ key: d.issue.key, items: [] });
@@ -219,7 +219,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="jira-transition">Move issue to another status</label>
           <select id="jira-transition" aria-label="Move issue to another status" className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-xs disabled:opacity-40" value={transitionId} onChange={e => setTransitionId(e.target.value)} disabled={writing || !availableTransitions.length}>
-            {!availableTransitions.length && <option value="">{transitions?.key === detail.issue.key ? "No transitions available" : "Loading transitions…"}</option>}
+            {!availableTransitions.length ? <option value="">{transitions?.key === detail.issue.key ? "No transitions available" : "Loading transitions…"}</option> : <option value="" disabled>Choose a transition…</option>}
             {availableTransitions.map(t => <option key={t.id} value={t.id}>{t.name}{t.to ? ` → ${t.to}` : ""}</option>)}
           </select>
           <Button size="sm" variant="outline" disabled={writing || !transitionId} onClick={() => void moveIssue(detail.issue.key)}>Move</Button>
