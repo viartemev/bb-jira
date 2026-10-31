@@ -29,6 +29,19 @@ export const detailSchema = z.object({
 export type Detail = z.infer<typeof detailSchema>;
 export interface JiraSettings { baseUrl: string; pat?: string; authMode: string; email: string; boardIds: string }
 
+/** Wait before retrying a rate-limited read: Jira's Retry-After (seconds or a date), else 1 s then 2 s; never above 10 s. */
+export function retryDelay(retryAfter: string | null, attempt: number): number {
+  const seconds = retryAfter?.trim() ? Number(retryAfter) : NaN;
+  const date = retryAfter ? Date.parse(retryAfter) : NaN;
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Number.isFinite(date) ? date - Date.now() : 1000 * 2 ** attempt;
+  return Math.min(Math.max(ms, 0), 10_000);
+}
+const pause = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  if (signal?.aborted) return reject(signal.reason);
+  const stop = () => { clearTimeout(timer); reject(signal!.reason); };
+  const timer = setTimeout(() => { signal?.removeEventListener("abort", stop); resolve(); }, ms);
+  signal?.addEventListener("abort", stop, { once: true });
+});
 export function plainText(value: unknown): string {
   if (typeof value === "string") return value;
   if (!value || typeof value !== "object") return "";
@@ -72,8 +85,18 @@ export class JiraClient {
     const headers: Record<string, string> = { Authorization: authorization, Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     let response: Response;
-    try { response = await this.request(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) }); }
-    catch { throw new Error("Cannot reach Jira. Check its URL, network/VPN, TLS certificate, or retry if the request timed out."); }
+    for (let attempt = 0; ; attempt++) {
+      try { response = await this.request(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) }); }
+      catch (e) {
+        // A caller that cancelled gets its own reason back, not a network diagnosis.
+        if (signal?.aborted) throw signal.reason ?? e;
+        throw new Error("Cannot reach Jira. Check its URL, network/VPN, TLS certificate, or retry if the request timed out.");
+      }
+      // Reads are safe to repeat. A write may already have been applied, so it is never retried.
+      if (response.status !== 429 || method !== "GET" || attempt >= 2) break;
+      await response.body?.cancel();
+      await pause(retryDelay(response.headers.get("Retry-After"), attempt), signal);
+    }
     if (!response.ok) {
       await response.body?.cancel();
       const write = method !== "GET";
