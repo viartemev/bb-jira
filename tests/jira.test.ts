@@ -67,11 +67,40 @@ test("invalid configuration and keys cannot inject paths or credentials", () => 
 });
 test("upstream error bodies and network errors never reveal the token", async () => {
   for (const status of [401, 403, 404, 429, 500]) {
-    const c = new JiraClient(settings, (async () => new Response("Bearer test-token-never-real", { status })) as typeof fetch);
+    const c = new JiraClient(settings, (async () => new Response("Bearer test-token-never-real", { status, headers: { "Retry-After": "0" } })) as typeof fetch);
     await assert.rejects(c.boards(), error => { assert.ok(error instanceof Error); assert.match(error.message, new RegExp(String(status))); assert.ok(!error.message.includes(settings.pat!)); return true; });
   }
   const c = new JiraClient(settings, (async () => { throw new Error("test-token-never-real"); }) as typeof fetch);
   await assert.rejects(c.boards(), /Cannot reach Jira/);
+});
+test("rate-limited reads are retried after Retry-After, writes never are", async () => {
+  let reads = 0;
+  const limited = new JiraClient(settings, (async () => ++reads < 3 ? new Response("slow down", { status: 429, headers: { "Retry-After": "0" } }) : Response.json({ values: [], isLast: true })) as typeof fetch);
+  assert.deepEqual(await limited.boards(), { boards: [], next: null });
+  assert.equal(reads, 3);
+  reads = 0;
+  const always = new JiraClient(settings, (async () => { reads++; return new Response("slow down", { status: 429, headers: { "Retry-After": "0" } }); }) as typeof fetch);
+  await assert.rejects(always.boards(), /HTTP 429/);
+  assert.equal(reads, 3);
+  let writes = 0;
+  const write = new JiraClient(settings, (async () => { writes++; return new Response("slow down", { status: 429, headers: { "Retry-After": "0" } }); }) as typeof fetch);
+  await assert.rejects(write.addComment("APP-7", "hi"), /HTTP 429/);
+  assert.equal(writes, 1);
+  const { retryDelay } = await import("../jira");
+  assert.equal(retryDelay("3", 0), 3000);
+  assert.equal(retryDelay("120", 0), 10_000);
+  assert.equal(retryDelay(new Date(Date.now() - 5000).toUTCString(), 0), 0);
+  assert.equal(retryDelay(null, 0), 1000); assert.equal(retryDelay(null, 1), 2000);
+});
+test("a cancelled request reports the cancellation, not a network problem", async () => {
+  const controller = new AbortController();
+  const c = new JiraClient(settings, (async (_input, init) => { controller.abort(new Error("Stopped by the user")); throw init?.signal?.reason; }) as typeof fetch);
+  await assert.rejects(c.boards(0, controller.signal), /Stopped by the user/);
+  const waiting = new AbortController();
+  const limited = new JiraClient(settings, (async () => { setTimeout(() => waiting.abort(new Error("Turn ended")), 10); return new Response("slow down", { status: 429, headers: { "Retry-After": "5" } }); }) as typeof fetch);
+  const started = Date.now();
+  await assert.rejects(limited.boards(0, waiting.signal), /Turn ended/);
+  assert.ok(Date.now() - started < 1000);
 });
 test("oversized and invalid JSON responses fail safely", async () => {
   const huge = new JiraClient(settings, (async () => new Response("x".repeat(8 * 1024 * 1024 + 1))) as typeof fetch);

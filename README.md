@@ -219,7 +219,7 @@ Deleting issues is not planned.
 | Network or TLS error | The BB server's VPN, HTTPS URL, context path, and corporate certificate trust |
 | No boards | Board IDs and Jira Software access; use **Refresh boards** in settings |
 | Missing agent tools | Start a new agent session so BB can load the plugin's tools and skill |
-| HTTP 429 | Wait before retrying; Jira is rate limiting requests |
+| HTTP 429 | Jira is rate limiting requests. Reads are already retried twice, honouring `Retry-After`; wait a minute before trying again |
 
 [Report a bug](https://github.com/viartemev/bb-jira/issues/new) with your BB/Jira versions and a reproduction that excludes tokens and private issue data.
 
