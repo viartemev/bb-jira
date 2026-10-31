@@ -25,6 +25,7 @@ test("backend surfaces validate inputs, use fresh secrets and resolve issue ment
     const result = await harness.behavior.callAgentTool("jira_issue", { key: "APP-7" });
     assert.match(JSON.stringify(result), /Task context/);
     assert.match(JSON.stringify(result), /Acceptance criteria/);
+    assert.deepEqual(JSON.parse(String(await harness.behavior.callAgentTool("jira_issue", { key: "APP-7", field: "customfield_1" }))), { field: "customfield_1", name: "customfield_1", value: '"Acceptance criteria"', next: null });
     const mention = harness.registrations.mentionProviders[0];
     const resolved = await mention.resolve("APP-7");
     assert.match(resolved.context, /Task context/);

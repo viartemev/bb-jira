@@ -4,6 +4,7 @@ import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
 import type { Detail, Issue, QuickFilter, Transition } from "./jira";
 import { combineBoardFilters } from "./lib/board-filters";
+import { namedFields } from "./lib/fields";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { mountIssueDrops, issueDragType } from "./issue-drag";
@@ -231,7 +232,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         </div>
         {writeError && <p role="alert" className="text-sm text-destructive">{writeError}</p>}
       </div>
-      <details><summary className="cursor-pointer text-sm">Comments ({detail.comments.length} of {detail.commentsTotal})</summary>
+      <details><summary className="cursor-pointer text-sm">Comments (newest {detail.comments.length} of {detail.commentsTotal})</summary>
         {detail.comments.map(c => <article key={c.id} className="border-t border-border py-3 text-sm"><p className="text-muted-foreground">{c.author} · {c.created}</p><p className="whitespace-pre-wrap">{c.body}</p></article>)}
         {detail.comments.length < detail.commentsTotal && <p className="text-sm text-muted-foreground">The agent can read more with jira_comments.</p>}
       </details>
@@ -240,7 +241,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
         {detail.subtasks.map(s => <button key={s.key} className="block text-sm underline" onClick={() => void openIssue(s.key)}>{s.key} {s.summary}</button>)}
         {detail.attachments.map(a => <p key={a.id} className="text-sm">{a.filename} · {a.size} bytes (metadata only)</p>)}
       </details>
-      <details><summary className="cursor-pointer text-sm">All fields</summary><pre className="text-xs whitespace-pre-wrap break-all">{JSON.stringify(detail.fields, null, 2)}</pre></details>
+      <details><summary className="cursor-pointer text-sm">All fields</summary><pre className="text-xs whitespace-pre-wrap break-all">{JSON.stringify(namedFields(detail.fields, detail.fieldNames), null, 2)}</pre></details>
     </section>}
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
     {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira.</p>}
