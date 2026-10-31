@@ -243,7 +243,7 @@ export function JiraPanel({ compact = false }: { compact?: boolean }) {
       <details><summary className="cursor-pointer text-sm">All fields</summary><pre className="text-xs whitespace-pre-wrap break-all">{JSON.stringify(detail.fields, null, 2)}</pre></details>
     </section>}
     {busy && <p role="status" className="text-sm text-muted-foreground">Loading board…</p>}
-    {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira.</p>}
+    {!busy && !boards.length && !error && <p className="text-sm text-muted-foreground">No accessible boards. Configure Jira in Settings → Plugins → Jira Boards.</p>}
     {boardId && <>
       <div aria-label="Kanban board" className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
         <div style={{ minWidth: `${grouped.length * 272}px` }}>

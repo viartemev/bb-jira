@@ -36,6 +36,26 @@ test("backend surfaces validate inputs, use fresh secrets and resolve issue ment
     await assert.rejects(harness.behavior.setSettings({ boardIds: "../../secrets" }));
   } finally { globalThis.fetch = original; await harness.lifecycle.dispose(); }
 });
+test("@ search looks up an exact key cheaply and treats a missing key as no match", async () => {
+  const original = globalThis.fetch;
+  const requests: URL[] = [];
+  globalThis.fetch = (async input => {
+    const url = new URL(String(input)); requests.push(url);
+    if (url.pathname.endsWith("/issue/APP-404")) return new Response("Not found", { status: 404 });
+    if (url.pathname.endsWith("/issue/APP-403")) return new Response("No", { status: 403 });
+    return Response.json({ key: "APP-7", fields: { summary: "Checkout", status: { id: "3", name: "In progress" } } });
+  }) as typeof fetch;
+  const { bb, harness } = createFakePluginHost({ pluginId: "jira-boards", settings: { baseUrl: "https://jira.example.test", pat: "fake-secret" } });
+  try {
+    await plugin(bb);
+    const mention = harness.registrations.mentionProviders[0];
+    assert.deepEqual(await mention.search({ query: "app-7" } as any), [{ id: "APP-7", title: "APP-7 Checkout", subtitle: "In progress" }]);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].searchParams.get("fields"), "summary,status,assignee,priority,issuetype");
+    assert.deepEqual(await mention.search({ query: "APP-404" } as any), []);
+    await assert.rejects(async () => mention.search({ query: "APP-403" } as any), /HTTP 403/);
+  } finally { globalThis.fetch = original; await harness.lifecycle.dispose(); }
+});
 test("plugin imports use public SDK only", async () => {
   const report = await experimental_scanPublicSdkOnly(process.cwd(), { allow: [/^(react|@radix-ui\/react-slot|class-variance-authority|clsx|tailwind-merge|jsdom|@testing-library\/react)$/] });
   assert.deepEqual(report.violations, []);

@@ -31,7 +31,7 @@ The CLI mirrors the tools: `bb jira comment KEY --body "text"`, `bb jira transit
 
 ## Reading rules
 
-Never ask for or print the PAT. The plugin stores it in BB secret settings. If unconfigured, direct the user to Settings → Plugins → Jira and have them enter the token there.
+Never ask for or print the PAT. The plugin stores it in BB secret settings. If unconfigured, direct the user to Settings → Plugins → Jira Boards and have them enter the token there.
 
 Use `jira_boards` and `jira_board_issues` for board browsing; follow the returned `next` offset. Filter board issues with JQL. Use `jira_comments` to retrieve remaining comment pages. Issue context is capped at 48k characters. To inspect a large field, call `jira_issue` with `field` and follow the returned character `offset`/`next`. All custom fields returned by Jira are in the fields object.
 
