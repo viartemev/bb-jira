@@ -124,8 +124,8 @@ Drag a card from the board into the message input. The input highlights while it
 
 | Tool | What it does |
 | --- | --- |
-| `jira_issue(key, field?, offset?)` | Reads issue context, or an individual field in 40k-character chunks |
-| `jira_comments(key, startAt?)` | Reads up to 50 comments with the next page offset |
+| `jira_issue(key, field?, offset?)` | Reads issue context, or an individual field (by ID or name) in 40k-character chunks |
+| `jira_comments(key, startAt?)` | Reads up to 50 comments, newest first, with the next page offset |
 | `jira_boards(startAt?)` | Lists configured boards or a page of accessible boards |
 | `jira_board_issues(boardId, jql?, startAt?)` | Lists up to 50 board issues, optionally filtered with JQL |
 | `jira_comment(key, body)` | Posts a comment as your Jira account |
@@ -155,7 +155,7 @@ Every write runs as your Jira account, with your permissions and workflow rules:
 
 - Access follows the token's Jira account permissions. Board IDs filter the board picker; they are not an access-control boundary.
 - Credentials stay on the BB server. Issue content is shared with your selected agent provider when you send a mention or use a Jira tool.
-- Initial context includes all returned fields, the first 50 comments, links, subtasks, and attachment metadata. It is capped at 48k characters with an explicit truncation notice.
+- Initial context includes non-empty fields labelled with their Jira names, the newest 50 comments, links, subtasks, and attachment metadata. It is capped at 48k characters with an explicit truncation notice.
 - Agents can request more field and comment pages. Individual comments are capped at 60k characters.
 - Attachment contents, full issue history, and linked issues are not downloaded automatically. Descriptions and comments display as plain text, including converted Cloud ADF.
 - Requests reject redirects, time out after 20 seconds, and cap upstream responses at 8 MiB. Error messages do not include upstream response bodies or credentials.
