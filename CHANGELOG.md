@@ -2,6 +2,26 @@
 
 Release notes are generated from the merged pull requests when a version tag is pushed.
 
+## 0.3.0 — 2026-11-03
+
+### Features
+* Retry rate-limited reads and report cancellations as such by @viartemev in https://github.com/viartemev/bb-jira/pull/33
+* Spend issue context on useful fields and the newest comments by @viartemev in https://github.com/viartemev/bb-jira/pull/31
+* Stop board loading at 1000 tasks and offer to load more by @viartemev in https://github.com/viartemev/bb-jira/pull/34
+* Assign an issue to me from the panel and agent tools by @viartemev in https://github.com/viartemev/bb-jira/pull/35
+* Read linked issues and subtasks in one tool call by @viartemev in https://github.com/viartemev/bb-jira/pull/36
+* Read text attachments with a size limit by @viartemev in https://github.com/viartemev/bb-jira/pull/37
+* Group swimlanes by epic, priority or nothing by @viartemev in https://github.com/viartemev/bb-jira/pull/38
+* Remember the selected board and filters by @viartemev in https://github.com/viartemev/bb-jira/pull/39
+### Fixes
+* Look up exact keys cheaply in @ search and fix setup hints by @viartemev in https://github.com/viartemev/bb-jira/pull/29
+* Require an explicit transition choice before Move by @viartemev in https://github.com/viartemev/bb-jira/pull/30
+* Keep links, list markers and inline nodes in ADF text by @viartemev in https://github.com/viartemev/bb-jira/pull/32
+### Other changes
+* Tidy generated changelog sections by @viartemev in https://github.com/viartemev/bb-jira/pull/12
+
+**Full Changelog**: https://github.com/viartemev/bb-jira/compare/v0.2.1...v0.3.0
+
 ## 0.2.1 — 2026-10-30
 
 ### Other changes
