@@ -73,6 +73,9 @@ test("write surfaces post comments and transitions with validated input", async 
     if (url.pathname.endsWith("/transitions")) return Response.json({ transitions: [{ id: "31", name: "Start progress", to: { id: "3", name: "In progress" } }] });
     if (url.pathname.endsWith("/issue/APP-7/comment") && method === "POST") return Response.json({ id: "501", author: { displayName: "Sam" }, created: "now", body: "привет" });
     if (url.pathname.endsWith("/comment")) return Response.json({ comments: [], total: 0 });
+    if (url.pathname.endsWith("/myself")) return Response.json({ name: "sam", displayName: "Sam" });
+    if (url.pathname.endsWith("/assignee") && method === "PUT") return new Response(null, { status: 204 });
+    if (url.searchParams.get("fields") === "assignee") return Response.json({ key: "APP-7", fields: { assignee: { displayName: "Sam" } } });
     if (url.searchParams.get("fields") === "status") return Response.json({ key: "APP-7", fields: { status: { id: "3", name: "In progress" } } });
     return Response.json({ key: "APP-7", fields: { summary: "Checkout", status: { id: "3", name: "In progress" } } });
   }) as typeof fetch;
@@ -101,6 +104,13 @@ test("write surfaces post comments and transitions with validated input", async 
     const cliTransition = await harness.behavior.runCli(["transition", "APP-7", "--to", "31", "--comment", "done"]);
     assert.equal(cliTransition.exitCode, 0);
     assert.match(cliTransition.stdout, /In progress/);
+    assert.deepEqual(await harness.behavior.callRpc("assign_to_me", { key: "APP-7" }), { key: "APP-7", assignee: "Sam" });
+    assert.deepEqual(writes.filter(w => w.method === "PUT").map(w => [w.path, w.body]), [["/rest/api/2/issue/APP-7/assignee", { name: "sam" }]]);
+    assert.match(String(await harness.behavior.callAgentTool("jira_assign_to_me", { key: "APP-7" })), /"assignee":"Sam"/);
+    const cliAssign = await harness.behavior.runCli(["assign-to-me", "APP-7"]);
+    assert.equal(cliAssign.exitCode, 0);
+    assert.match(cliAssign.stdout, /"assignee":"Sam"/);
+    await assert.rejects(harness.behavior.callRpc("assign_to_me", { key: "../myself" }));
     assert.equal(writes.every(w => w.auth === "Bearer fake-secret"), true);
   } finally { globalThis.fetch = original; await harness.lifecycle.dispose(); }
 });

@@ -155,7 +155,7 @@ test("switching boards stops pagination and ignores a late response from the pre
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
 
-test("issue detail writes a comment and moves the ticket through a transition", async () => {
+test("issue detail writes a comment, moves the ticket through a transition and assigns it to me", async () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
   Object.defineProperties(globalThis, {
     window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
@@ -176,6 +176,7 @@ test("issue detail writes a comment and moves the ticket through a transition", 
     transitions: () => [{ id: "31", name: "Start progress", to: "In progress", toId: "3" }],
     add_comment: input => ({ id: "501", author: "Sam", created: "now", body: (input as { body: string }).body }),
     transition: () => { status = "In progress"; return { key: "APP-7", status }; },
+    assign_to_me: () => ({ key: "APP-7", assignee: "Alex" }),
   } });
   try {
     await slot.findByText("Checkout");
@@ -197,5 +198,8 @@ test("issue detail writes a comment and moves the ticket through a transition", 
     fireEvent.click(slot.getByRole("button", { name: "Move" }));
     await slot.findByText("APP-7: status is now In progress.");
     assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "transition").map(call => call.input), [{ key: "APP-7", transitionId: "31" }]);
+    fireEvent.click(await slot.findByRole("button", { name: "Assign to me" }));
+    await slot.findByText("APP-7: assigned to Alex.");
+    assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "assign_to_me").map(call => call.input), [{ key: "APP-7" }]);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });

@@ -1,6 +1,6 @@
 import { defineRpcContract, defineCli, cliCommand, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { JiraClient, JiraHttpError, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, commentBodySchema, commentSchema, transitionIdSchema, transitionResultSchema, transitionSchema, type JiraSettings } from "./jira";
+import { JiraClient, JiraHttpError, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, commentBodySchema, commentSchema, transitionIdSchema, transitionResultSchema, transitionSchema, assignResultSchema, type JiraSettings } from "./jira";
 
 const boardInput = pageSchema.extend({ boardId: z.number().int().positive(), jql: z.string().max(4000).default("") });
 export const rpcContract = defineRpcContract({
@@ -12,6 +12,7 @@ export const rpcContract = defineRpcContract({
   add_comment: { input: z.object({ key: keySchema, body: commentBodySchema }), output: commentSchema },
   transitions: { input: z.object({ key: keySchema }), output: z.array(transitionSchema) },
   transition: { input: z.object({ key: keySchema, transitionId: transitionIdSchema, comment: commentBodySchema.optional() }), output: transitionResultSchema },
+  assign_to_me: { input: z.object({ key: keySchema }), output: assignResultSchema },
   connection: { input: z.null(), output: z.object({ displayName: z.string() }) },
   credential_status: { input: z.null(), output: z.object({ saved: z.boolean(), cloud: z.boolean() }) },
   refresh_boards: { input: z.null(), output: z.null() },
@@ -51,6 +52,7 @@ export default async function plugin(bb: BbPluginApi) {
     add_comment: async ({ key, body }) => (await client()).addComment(key, body),
     transitions: async ({ key }) => (await client()).transitions(key),
     transition: async ({ key, transitionId, comment }) => (await client()).transition(key, transitionId, comment),
+    assign_to_me: async ({ key }) => (await client()).assignToMe(key),
     connection: async () => { const user = await (await client()).myself(); return { displayName: String(user.displayName ?? user.name ?? "Connected") }; },
     credential_status: async () => ({ saved: Boolean((await settings.get()).pat), cloud: (await mode.get()).authMode === "cloud" }),
     refresh_boards: async () => { bb.realtime.publish("boards-refresh-requested", {}); return null; },
@@ -74,6 +76,8 @@ export default async function plugin(bb: BbPluginApi) {
     execute: async ({ key, body }, { signal }) => JSON.stringify(await (await client()).addComment(key, body, signal)) });
   bb.agents.registerTool({ name: "jira_transition", description: "Move a Jira issue through one workflow transition, optionally adding a comment in the same request. Call jira_transitions first to get transition IDs and their target statuses.", parameters: z.object({ key: keySchema, transitionId: transitionIdSchema, comment: commentBodySchema.optional() }),
     execute: async ({ key, transitionId, comment }, { signal }) => JSON.stringify(await (await client()).transition(key, transitionId, comment, signal)) });
+  bb.agents.registerTool({ name: "jira_assign_to_me", description: "Assign a Jira issue to the account behind the saved token. This changes the ticket, so use it only when the user asked to take or be assigned the issue; it cannot assign anyone else.", parameters: z.object({ key: keySchema }),
+    execute: async ({ key }, { signal }) => JSON.stringify(await (await client()).assignToMe(key, signal)) });
   bb.agents.registerTool({ name: "jira_boards", description: "List configured Jira boards (or accessible boards if no IDs configured), 50 per page.", parameters: pageSchema,
     execute: async ({ startAt }, { signal }) => JSON.stringify(await (await client()).boards(startAt, signal)) });
   bb.agents.registerTool({ name: "jira_board_issues", description: "Read up to 50 issues on a Jira board, optionally filter by JQL. Follow next offset.", parameters: boardInput,
@@ -92,7 +96,7 @@ export default async function plugin(bb: BbPluginApi) {
       return (await c.search(`text ~ "${safe}" ORDER BY updated DESC`)).slice(0, 10).map(i => ({ id: i.key, title: `${i.key} ${i.summary}`, subtitle: i.status }));
     }, resolve: async key => ({ context: issueContext(await (await client()).detail(key)) }),
   });
-  bb.cli.register(defineCli({ name: "jira", summary: "Read Jira boards and issues, and write comments or workflow transitions", commands: {
+  bb.cli.register(defineCli({ name: "jira", summary: "Read Jira boards and issues, and write comments, workflow transitions or self-assignment", commands: {
     boards: cliCommand({ summary: "List configured boards", options: { start: { type: "integer", default: 0, min: 0, max: 1_000_000, description: "Board page offset" } }, run: async (input, ctx) => ({ exitCode: 0, stdout: JSON.stringify(await (await client()).boards(pageSchema.parse({ startAt: input.options.start }).startAt, ctx.signal)) }) }),
     issue: cliCommand({ summary: "Read an issue and its context", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }], run: async (input, ctx) => ({ exitCode: 0, stdout: issueContext(await (await client()).detail(keySchema.parse(input.positionals.key), ctx.signal)) }) }),
     comment: cliCommand({ summary: "Write a comment on an issue", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }],
@@ -103,5 +107,7 @@ export default async function plugin(bb: BbPluginApi) {
     transition: cliCommand({ summary: "Move an issue through a workflow transition", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }],
       options: { to: { type: "string", required: true, description: "Transition ID from `bb jira transitions KEY`" }, comment: { type: "string", description: "Optional comment added by the same request", stdin: true } },
       run: async (input, ctx) => { const key = keySchema.parse(input.positionals.key); const result = await (await client()).transition(key, String(input.options.to), input.options.comment as string | undefined, ctx.signal); return { exitCode: 0, stdout: JSON.stringify(result) }; } }),
+    "assign-to-me": cliCommand({ summary: "Assign an issue to yourself", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }],
+      run: async (input, ctx) => ({ exitCode: 0, stdout: JSON.stringify(await (await client()).assignToMe(keySchema.parse(input.positionals.key), ctx.signal)) }) }),
   } }));
 }

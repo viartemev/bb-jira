@@ -1,6 +1,6 @@
 ---
 name: jira
-description: Read Jira tickets, boards, and comments through the Jira BB plugin when the user mentions a Jira key or link or asks to work on a ticket, and write a comment or move a ticket through its workflow when they ask for it.
+description: Read Jira tickets, boards, and comments through the Jira BB plugin when the user mentions a Jira key or link or asks to work on a ticket, and write a comment, move a ticket through its workflow or assign it to the user when they ask for it.
 ---
 
 # Jira context
@@ -16,18 +16,20 @@ When a user provides a Jira issue key (e.g. APP-123) or Jira browse link, use `j
 | `jira_comment(key, body)` | Posts a comment as the user's Jira account |
 | `jira_transitions(key)` | Lists available workflow transitions |
 | `jira_transition(key, transitionId, comment?)` | Applies one transition |
+| `jira_assign_to_me(key)` | Assigns the issue to the user's Jira account |
 
 ## Writing
 
-Write only when the user asked for that exact change. "Write a greeting in the ticket" means `jira_comment`; a request to fix or investigate a ticket does not authorize a comment or a status change.
+Write only when the user asked for that exact change. "Write a greeting in the ticket" means `jira_comment`; a request to fix or investigate a ticket does not authorize a comment, a status change or an assignment.
 
 - Post the user's own words in `body` (their language, their voice). Do not summarize the ticket into a comment, and do not add status reports they did not ask for.
 - Call `jira_transitions` first and choose by the target status name; transition IDs are workflow-specific and differ per issue type. Never guess an ID.
 - Attach a comment to a transition only when the user asked for both, or when their instruction implies a reason for the move.
 - Report the resulting status from the tool result instead of assuming the move happened; a failed write returns Jira's HTTP status and changed nothing.
+- `jira_assign_to_me` only assigns the issue to the user behind the token; use it when they ask to take, pick up or be assigned the ticket. It cannot assign anyone else.
 - Do not retry a failed write blindly: a permission, workflow-condition or required-field error needs a human decision.
 
-The CLI mirrors the tools: `bb jira comment KEY --body "text"`, `bb jira transitions KEY`, `bb jira transition KEY --to ID [--comment "text"]`. Both `--body` and `--comment` accept `-stdin` for long or quoted text.
+The CLI mirrors the tools: `bb jira comment KEY --body "text"`, `bb jira transitions KEY`, `bb jira transition KEY --to ID [--comment "text"]`, `bb jira assign-to-me KEY`. Both `--body` and `--comment` accept `-stdin` for long or quoted text.
 
 ## Reading rules
 

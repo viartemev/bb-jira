@@ -21,6 +21,7 @@ export type Transition = z.infer<typeof transitionSchema>;
 export const commentSchema = z.object({ id: z.string(), author: z.string(), created: z.string(), body: z.string() });
 export type Comment = z.infer<typeof commentSchema>;
 export const transitionResultSchema = z.object({ key: z.string(), status: z.string() });
+export const assignResultSchema = z.object({ key: z.string(), assignee: z.string() });
 export const detailSchema = z.object({
   issue: issueSchema, description: z.string(), fields: z.record(z.string(), z.json()), fieldNames: z.record(z.string(), z.string()).default({}),
   comments: z.array(z.object({ id: z.string(), author: z.string(), created: z.string(), body: z.string() })), commentsTotal: z.number(),
@@ -108,7 +109,7 @@ export class JiraClient {
   private version() { return this.settings.authMode === "cloud" ? 3 : 2; }
   /** Cloud v3 takes comment bodies as ADF; Server/Data Center v2 takes plain text. */
   private commentBody(text: string) { return this.settings.authMode === "cloud" ? adfBody(text) : text; }
-  private async send(method: "GET" | "POST", path: string, body?: unknown, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<any> {
+  private async send(method: "GET" | "POST" | "PUT", path: string, body?: unknown, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<any> {
     const url = new URL(this.baseUrl + path);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
     const authorization = this.settings.authMode === "cloud" ? `Basic ${Buffer.from(`${this.settings.email}:${this.settings.pat}`).toString("base64")}` : `Bearer ${this.settings.pat}`;
@@ -131,7 +132,7 @@ export class JiraClient {
       await response.body?.cancel();
       const write = method !== "GET";
       const hint = ({
-        400: write ? "Jira rejected the change. Check the transition and comment, and any required fields on the transition screen." : "Jira rejected the request.",
+        400: write ? "Jira rejected the change. Check the transition, comment or assignee, and any required fields on the transition screen." : "Jira rejected the request.",
         401: "Check the token and authentication mode.",
         403: write ? "Your account cannot change this issue, or a workflow condition or permission blocked it." : "Your account cannot access this resource.",
         404: write ? "Issue not found, or it is not visible to your account. Nothing was changed." : "Resource not found or not visible to your account.",
@@ -248,6 +249,17 @@ export class JiraClient {
     // The move is already applied here; a failed readback must not look like a failed move, or a retry would repeat it.
     const raw = await this.get(`/rest/api/${this.version()}/issue/${key}`, { fields: "status" }, signal).catch(() => null);
     return transitionResultSchema.parse({ key: String(raw?.key ?? key), status: String(raw?.fields?.status?.name ?? "Unknown") });
+  }
+  /** Assign the issue to the token's own account; Cloud identifies users by accountId, Server/Data Center by username. */
+  async assignToMe(key: string, signal?: AbortSignal) {
+    key = keySchema.parse(key);
+    const me = await this.myself(signal);
+    const user = this.settings.authMode === "cloud" ? { accountId: String(me?.accountId ?? "") } : { name: String(me?.name ?? "") };
+    if (!Object.values(user)[0]) throw new Error("Jira did not return your account ID. Check the token and authentication mode.");
+    await this.send("PUT", `/rest/api/${this.version()}/issue/${key}/assignee`, user, {}, signal);
+    // As with transitions, the assignment is already applied; a failed readback must not look like a failed write.
+    const raw = await this.get(`/rest/api/${this.version()}/issue/${key}`, { fields: "assignee" }, signal).catch(() => null);
+    return assignResultSchema.parse({ key: String(raw?.key ?? key), assignee: String(raw?.fields?.assignee?.displayName ?? me?.displayName ?? "You") });
   }
   /** One field by ID or by its name, fetched without the rest of the issue. */
   async field(key: string, field: string, signal?: AbortSignal): Promise<{ id: string; name: string; value: unknown }> {
