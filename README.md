@@ -126,6 +126,7 @@ Drag a card from the board into the message input. The input highlights while it
 | --- | --- |
 | `jira_issue(key, field?, offset?)` | Reads issue context, or an individual field (by ID or name) in 40k-character chunks |
 | `jira_comments(key, startAt?)` | Reads up to 50 comments, newest first, with the next page offset |
+| `jira_attachment(id, offset?)` | Reads a text attachment (log, stack trace, JSON…) in 40k-character chunks of its first MiB; binary files stay metadata |
 | `jira_related(key)` | Lists the parent, linked issues and subtasks with status and assignee in one call |
 | `jira_boards(startAt?)` | Lists configured boards or a page of accessible boards |
 | `jira_board_issues(boardId, jql?, startAt?)` | Lists up to 50 board issues, optionally filtered with JQL |
@@ -141,6 +142,7 @@ The same connection is available from the CLI:
 ```sh
 bb jira issue DEMO-104
 bb jira related DEMO-104
+bb jira attachment 10422
 bb jira boards --start 0
 bb jira comment DEMO-104 --body "Deployed to staging"
 bb jira transitions DEMO-104
@@ -161,7 +163,7 @@ Every write runs as your Jira account, with your permissions and workflow rules:
 - Credentials stay on the BB server. Issue content is shared with your selected agent provider when you send a mention or use a Jira tool.
 - Initial context includes non-empty fields labelled with their Jira names, the newest 50 comments, links, subtasks, and attachment metadata. It is capped at 48k characters with an explicit truncation notice.
 - Agents can request more field and comment pages. Individual comments are capped at 60k characters.
-- Attachment contents, full issue history, and linked issues are not downloaded automatically; `jira_related` gives agents a one-call summary of linked issues and subtasks. Descriptions and comments display as plain text, including converted Cloud ADF.
+- Attachment contents, full issue history, and linked issues are not downloaded automatically. Agents can read text attachments (by MIME type, or by extension such as `.log` when Jira reports a generic type) up to 1 MiB each with `jira_attachment`; binary files stay metadata only; `jira_related` gives agents a one-call summary of linked issues and subtasks. Descriptions and comments display as plain text, including converted Cloud ADF.
 - Requests reject redirects, time out after 20 seconds, and cap upstream responses at 8 MiB. Error messages do not include upstream response bodies or credentials.
 
 ## Roadmap
@@ -174,7 +176,8 @@ What a ticket can do today and what it cannot yet. A ticked box means the curren
 - [x] Custom fields and large fields in 40k-character chunks
 - [x] Search: JQL, the @ menu, comment pages
 - [ ] Issue history: who changed which field and moved which status
-- [ ] Attachments: download and preview (metadata only today)
+- [x] Text attachments for agents: logs, stack traces, JSON, up to 1 MiB
+- [ ] Attachments: preview in the panel and binary downloads
 - [ ] "My work": assigned to me, overdue, recently opened, saved filters
 - [ ] Sprint, epic, hierarchy and backlog
 
