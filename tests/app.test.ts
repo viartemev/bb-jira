@@ -203,3 +203,49 @@ test("issue detail writes a comment, moves the ticket through a transition and a
     assert.deepEqual(slot.inspection.rpcCalls.filter(call => call.method === "assign_to_me").map(call => call.input), [{ key: "APP-7" }]);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
+
+test("swimlanes group by assignee, epic or parent, priority, or not at all", async () => {
+  const { swimlanes } = await import("../app");
+  const base = { status: "To do", statusId: "1", type: "Task", url: "" };
+  const issues = [
+    { ...base, key: "A-1", summary: "One", assignee: "Unassigned", priority: "Low", priorityId: "4" },
+    { ...base, key: "A-2", summary: "Two", assignee: "Sam", assigneeId: "s", priority: "Highest", priorityId: "1", parentKey: "A-10", parentSummary: "Epic" },
+    { ...base, key: "A-3", summary: "Three", assignee: "Alex", assigneeId: "a", priority: "", parentKey: "A-9", parentSummary: "Other" },
+    { ...base, key: "A-4", summary: "Four", assignee: "Sam", assigneeId: "s", priority: "Medium", priorityId: "3", parentKey: "A-10", parentSummary: "Epic" },
+  ];
+  const view = (g: Parameters<typeof swimlanes>[1]) => swimlanes(issues, g).map(l => [l.name, l.items.map(i => i.key).join(",")]);
+  assert.deepEqual(view("assignee"), [["Alex", "A-3"], ["Sam", "A-2,A-4"], ["Unassigned", "A-1"]]);
+  assert.deepEqual(view("parent"), [["A-9 Other", "A-3"], ["A-10 Epic", "A-2,A-4"], ["No epic or parent", "A-1"]]);
+  assert.deepEqual(view("priority"), [["Highest", "A-2"], ["Medium", "A-4"], ["Low", "A-1"], ["No priority", "A-3"]]);
+  assert.deepEqual(view("none"), [["All tasks", "A-1,A-2,A-3,A-4"]]);
+});
+
+test("the board footer switches swimlane grouping", async () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
+  Object.defineProperties(globalThis, {
+    window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
+    navigator: { value: dom.window.navigator, configurable: true }, HTMLElement: { value: dom.window.HTMLElement, configurable: true },
+    MutationObserver: { value: dom.window.MutationObserver, configurable: true },
+  });
+  const { renderSlot } = await import("@get-bb/plugin-sdk/testing/app");
+  const { fireEvent } = await import("@testing-library/react");
+  const { JiraSidePanel } = await import("../app");
+  const issue = { key: "APP-7", summary: "Checkout", status: "To do", statusId: "1", assignee: "Sam", priority: "High", priorityId: "2", type: "Bug", url: "", parentKey: "APP-1", parentSummary: "Payments" };
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira-boards", rpc: {
+    boards: () => ({ boards: [{ id: 9, name: "Team", type: "kanban" }], next: null }),
+    quick_filters: () => ({ available: true, filters: [] }),
+    columns: () => [{ name: "To do", statusIds: ["1"] }],
+    issues: () => ({ issues: [issue], startAt: 0, total: 1, next: null }),
+  } });
+  try {
+    await slot.findByLabelText("Assignee: Sam");
+    const select = slot.getByLabelText("Swimlanes");
+    fireEvent.change(select, { target: { value: "parent" } });
+    assert.ok((await slot.findByLabelText("Epic or parent: APP-1 Payments")).contains(slot.getByText("Checkout")));
+    fireEvent.change(select, { target: { value: "priority" } });
+    await slot.findByLabelText("Priority: High");
+    fireEvent.change(select, { target: { value: "none" } });
+    assert.ok(slot.getByLabelText("To do").contains(slot.getByText("Checkout")));
+    assert.equal(slot.queryByLabelText(/^(Assignee|Priority|Epic or parent):/), null);
+  } finally { slot.lifecycle.unmount(); dom.window.close(); }
+});
