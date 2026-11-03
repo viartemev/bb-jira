@@ -238,3 +238,26 @@ test("a transition that was applied still succeeds when the status readback fail
   const c = new JiraClient(settings, (async (_input, init) => init?.method === "POST" ? new Response(null, { status: 204 }) : new Response("boom", { status: 500 })) as typeof fetch);
   assert.deepEqual(await c.transition("APP-7", "31"), { key: "APP-7", status: "Unknown" });
 });
+
+test("assign to me uses the token's account: accountId on Cloud, username on Server", async () => {
+  const seen: { method?: string; path: string; body: any }[] = [];
+  const handler = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input)); const method = init?.method;
+    seen.push({ method, path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
+    if (url.pathname.endsWith("/myself")) return Response.json({ accountId: "acc-1", name: "sam", displayName: "Sam" });
+    if (method === "PUT") return new Response(null, { status: 204 });
+    assert.equal(url.searchParams.get("fields"), "assignee");
+    return Response.json({ key: "APP-7", fields: { assignee: { displayName: "Sam" } } });
+  }) as typeof fetch;
+  const server = new JiraClient(settings, handler);
+  assert.deepEqual(await server.assignToMe("app-7"), { key: "APP-7", assignee: "Sam" });
+  assert.deepEqual(seen[1], { method: "PUT", path: "/jira/rest/api/2/issue/APP-7/assignee", body: { name: "sam" } });
+  const cloud = new JiraClient({ ...settings, authMode: "cloud", email: "user@example.test" }, handler);
+  await cloud.assignToMe("APP-7");
+  assert.deepEqual(seen[4], { method: "PUT", path: "/jira/rest/api/3/issue/APP-7/assignee", body: { accountId: "acc-1" } });
+  await assert.rejects(server.assignToMe("APP-7/../../myself"));
+  const anonymous = new JiraClient(settings, (async () => Response.json({})) as typeof fetch);
+  await assert.rejects(anonymous.assignToMe("APP-7"), /account ID/);
+  const forbidden = new JiraClient(settings, (async (input: RequestInfo | URL) => String(input).endsWith("/myself") ? Response.json({ name: "sam" }) : new Response("No", { status: 403 })) as typeof fetch);
+  await assert.rejects(forbidden.assignToMe("APP-7"), /cannot change this issue/);
+});

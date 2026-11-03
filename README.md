@@ -28,8 +28,8 @@ Browse a Kanban board beside your chat, drag in a ticket, and give your agent th
 - **A compact toolbar.** Choose a board, apply a JQL filter, open an issue by key or URL, and refresh the board in one row.
 - **Drag a ticket into chat.** Drop a card anywhere inside the message input, or use **Add to chat**. Your existing draft stays intact.
 - **Fresh context when you send.** A Jira mention resolves into issue fields, description, comments, links, subtasks, and attachment metadata.
-- **Write back when you mean to.** Post a comment or move a ticket through its workflow from the issue panel, or ask the agent to do it; Jira permissions and workflow rules still decide what succeeds.
-- **Tools for the next question.** Agents can retrieve individual fields, additional comment pages, and other issues, and can comment or transition an issue when you ask them to.
+- **Write back when you mean to.** Post a comment, move a ticket through its workflow or assign it to yourself from the issue panel, or ask the agent to do it; Jira permissions and workflow rules still decide what succeeds.
+- **Tools for the next question.** Agents can retrieve individual fields, additional comment pages, and other issues, and can comment on, transition or self-assign an issue when you ask them to.
 
 Independent community plugin for [BB](https://getbb.app). Not affiliated with Atlassian.
 
@@ -131,6 +131,7 @@ Drag a card from the board into the message input. The input highlights while it
 | `jira_comment(key, body)` | Posts a comment as your Jira account |
 | `jira_transitions(key)` | Lists the workflow transitions available on an issue |
 | `jira_transition(key, transitionId, comment?)` | Applies one transition, optionally with a comment |
+| `jira_assign_to_me(key)` | Assigns the issue to your Jira account |
 
 A bundled [Jira skill](skills/jira/SKILL.md) teaches agents when to fetch context, follow pagination, treat Jira content as reference data, and only write when you ask.
 
@@ -142,6 +143,7 @@ bb jira boards --start 0
 bb jira comment DEMO-104 --body "Deployed to staging"
 bb jira transitions DEMO-104
 bb jira transition DEMO-104 --to 31 --comment "Ready for review"
+bb jira assign-to-me DEMO-104
 bb jira --help
 ```
 
@@ -149,9 +151,9 @@ bb jira --help
 
 ## Permissions and limits
 
-The plugin reads Jira and writes only two things: comments and workflow transitions. It never edits descriptions or fields, assigns tickets, or changes board configuration. Dragging a card adds context to a message; it does not move the ticket between Jira statuses.
+The plugin reads Jira and writes only three things: comments, workflow transitions, and assigning an issue to yourself. It never edits descriptions or fields, assigns tickets to anyone else, or changes board configuration. Dragging a card adds context to a message; it does not move the ticket between Jira statuses.
 
-Every write runs as your Jira account, with your permissions and workflow rules: a transition that requires a screen, a mandatory field, or a condition fails with Jira's HTTP status and changes nothing. Agents write only when you ask them to; the issue panel has explicit **Comment** and **Move** buttons.
+Every write runs as your Jira account, with your permissions and workflow rules: a transition that requires a screen, a mandatory field, or a condition fails with Jira's HTTP status and changes nothing. Agents write only when you ask them to; the issue panel has explicit **Comment**, **Move** and **Assign to me** buttons.
 
 - Access follows the token's Jira account permissions. Board IDs filter the board picker; they are not an access-control boundary.
 - Credentials stay on the BB server. Issue content is shared with your selected agent provider when you send a mention or use a Jira tool.
@@ -181,7 +183,8 @@ What a ticket can do today and what it cannot yet. A ticked box means the curren
 - [ ] Status change when the transition screen requires fields (resolution and others)
 - [ ] Comment with markdown, code, lists and @mentions
 - [ ] Edit and delete your own comment
-- [ ] Assignee, "assign to me"
+- [x] Assign to me
+- [ ] Assign to someone else
 - [ ] Summary and description
 - [ ] Priority, labels, components, fixVersion
 - [ ] Due date, estimate, worklog

@@ -176,6 +176,17 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
     } catch (e) { setWriteError(message(e)); }
     finally { setWriting(false); }
   }
+  async function assignToMe(issueKey: string) {
+    if (writing) return;
+    setWriting(true); setWriteError("");
+    try {
+      const result = await rpc.call("assign_to_me", { key: issueKey });
+      setRefreshId(id => id + 1);
+      await openIssue(issueKey);
+      setNotice(`${issueKey}: assigned to ${result.assignee}.`);
+    } catch (e) { setWriteError(message(e)); }
+    finally { setWriting(false); }
+  }
   function addToChat(issue: Issue) {
     composer.insert([{ provider: "issue", id: issue.key, label: issue.key }], { at: "end", block: true });
     if (composer.scope.kind === "new-thread") navigate.toCompose({ focusPrompt: true });
@@ -244,6 +255,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
             {availableTransitions.map(t => <option key={t.id} value={t.id}>{t.name}{t.to ? ` → ${t.to}` : ""}</option>)}
           </select>
           <Button size="sm" variant="outline" disabled={writing || !transitionId} onClick={() => void moveIssue(detail.issue.key)}>Move</Button>
+          <Button size="sm" variant="outline" disabled={writing} onClick={() => void assignToMe(detail.issue.key)}>Assign to me</Button>
         </div>
         <label className="sr-only" htmlFor="jira-comment">Write a comment</label>
         <textarea id="jira-comment" aria-label="Write a comment" className="min-h-16 w-full resize-y rounded-md border border-input bg-transparent p-2 text-sm" placeholder="Write a comment…" maxLength={32767} value={commentDraft} onChange={e => setCommentDraft(e.target.value)} disabled={writing}/>
