@@ -249,3 +249,39 @@ test("the board footer switches swimlane grouping", async () => {
     assert.equal(slot.queryByLabelText(/^(Assignee|Priority|Epic or parent):/), null);
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
+
+test("the board reopens on the saved board, filters and grouping, and saves changes", async () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
+  Object.defineProperties(globalThis, {
+    window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
+    navigator: { value: dom.window.navigator, configurable: true }, HTMLElement: { value: dom.window.HTMLElement, configurable: true },
+    MutationObserver: { value: dom.window.MutationObserver, configurable: true },
+  });
+  const { renderSlot } = await import("@get-bb/plugin-sdk/testing/app");
+  const { fireEvent, waitFor } = await import("@testing-library/react");
+  const { JiraSidePanel } = await import("../app");
+  const issue = { key: "APP-7", summary: "Checkout", status: "To do", statusId: "1", assignee: "Sam", priority: "High", priorityId: "2", type: "Bug", url: "" };
+  const saved: unknown[] = [];
+  const loads: { boardId: number; jql: string }[] = [];
+  const slot = renderSlot({ component: JiraSidePanel }, {}, { pluginId: "jira-boards", rpc: {
+    boards: () => ({ boards: [{ id: 1, name: "First", type: "kanban" }, { id: 2, name: "Second", type: "kanban" }], next: null }),
+    view_state: () => ({ boardId: 2, jql: "project = APP", quickFilterIds: ["bugs"], grouping: "priority" }),
+    save_view_state: input => { saved.push(input); return null; },
+    quick_filters: () => ({ available: true, filters: [{ id: "bugs", name: "Bugs", jql: "issuetype = Bug", description: "" }] }),
+    columns: () => [{ name: "To do", statusIds: ["1"] }],
+    issues: input => { const { boardId, jql } = input as { boardId: number; jql: string }; loads.push({ boardId, jql }); return { issues: [issue], startAt: 0, total: 1, next: null }; },
+  } });
+  try {
+    await slot.findByLabelText("Priority: High");
+    assert.equal((slot.getByLabelText("Board") as HTMLSelectElement).value, "2");
+    assert.equal((slot.getByLabelText("Filter board using JQL") as HTMLInputElement).value, "project = APP");
+    assert.equal(slot.getByRole("button", { name: "Bugs" }).getAttribute("aria-pressed"), "true");
+    assert.deepEqual(loads, [{ boardId: 2, jql: "(project = APP) AND (issuetype = Bug)" }], "the saved view loads the board once, with its quick filter");
+    await waitFor(() => assert.ok(saved.length > 0));
+    assert.deepEqual(saved.at(-1), { boardId: 2, jql: "project = APP", quickFilterIds: ["bugs"], grouping: "priority" });
+    fireEvent.change(slot.getByLabelText("Swimlanes"), { target: { value: "none" } });
+    await waitFor(() => assert.deepEqual(saved.at(-1), { boardId: 2, jql: "project = APP", quickFilterIds: ["bugs"], grouping: "none" }));
+    fireEvent.change(slot.getByLabelText("Board"), { target: { value: "1" } });
+    await waitFor(() => assert.deepEqual(saved.at(-1), { boardId: 1, jql: "project = APP", quickFilterIds: [], grouping: "none" }));
+  } finally { slot.lifecycle.unmount(); dom.window.close(); }
+});
