@@ -261,3 +261,37 @@ test("assign to me uses the token's account: accountId on Cloud, username on Ser
   const forbidden = new JiraClient(settings, (async (input: RequestInfo | URL) => String(input).endsWith("/myself") ? Response.json({ name: "sam" }) : new Response("No", { status: 403 })) as typeof fetch);
   await assert.rejects(forbidden.assignToMe("APP-7"), /cannot change this issue/);
 });
+
+test("related issues come back in one list with status and assignee, from one read and one search", async () => {
+  const requests: URL[] = [];
+  const c = new JiraClient(settings, (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input)); requests.push(url);
+    if (url.pathname.endsWith("/search")) return Response.json({ issues: [
+      { key: "APP-1", fields: { summary: "Epic", status: { name: "In progress" }, assignee: { displayName: "Lee" }, issuetype: { name: "Epic" } } },
+      { key: "APP-6", fields: { summary: "Dependency", status: { name: "Done" }, assignee: { displayName: "Sam" }, issuetype: { name: "Task" } } },
+    ] });
+    return Response.json({ key: "APP-7", fields: {
+      parent: { key: "APP-1", fields: { summary: "Epic", status: { name: "In progress" }, issuetype: { name: "Epic" } } },
+      issuelinks: [{ type: { inward: "is blocked by" }, inwardIssue: { key: "APP-6", fields: { summary: "Dependency", status: { name: "Done" } } } }, { type: { outward: "relates to" } }],
+      subtasks: [{ key: "APP-8", fields: { summary: "Hidden subtask", status: { name: "To do" }, issuetype: { name: "Sub-task" } } }],
+    } });
+  }) as typeof fetch);
+  assert.deepEqual(await c.related("app-7"), { key: "APP-7", truncated: false, related: [
+    { relation: "parent", key: "APP-1", summary: "Epic", status: "In progress", assignee: "Lee", type: "Epic" },
+    { relation: "is blocked by", key: "APP-6", summary: "Dependency", status: "Done", assignee: "Sam", type: "Task" },
+    { relation: "subtask", key: "APP-8", summary: "Hidden subtask", status: "To do", assignee: "Unknown", type: "Sub-task" },
+  ] });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].searchParams.get("fields"), "parent,issuelinks,subtasks");
+  assert.equal(requests[1].searchParams.get("jql"), "key in (APP-1,APP-6,APP-8)");
+  assert.equal(requests[1].searchParams.get("validateQuery"), "warn");
+
+  // A failed assignee search still returns what the issue itself says about its relatives.
+  const offline = new JiraClient(settings, (async (input: RequestInfo | URL) => String(input).includes("/search") ? new Response("boom", { status: 500 }) : Response.json({ key: "APP-7", fields: { subtasks: [{ key: "APP-8", fields: { summary: "Sub", status: { name: "To do" } } }] } })) as typeof fetch);
+  assert.deepEqual((await offline.related("APP-7")).related, [{ relation: "subtask", key: "APP-8", summary: "Sub", status: "To do", assignee: "Unknown", type: "" }]);
+  // No relatives: no search at all.
+  let calls = 0;
+  const lonely = new JiraClient(settings, (async () => { calls++; return Response.json({ key: "APP-7", fields: {} }); }) as typeof fetch);
+  assert.deepEqual(await lonely.related("APP-7"), { key: "APP-7", related: [], truncated: false });
+  assert.equal(calls, 1);
+});

@@ -4,7 +4,7 @@ Choose Jira boards in the plugin settings, browse horizontal Kanban columns besi
 
 Drag a card into the message input or use **Add to chat** to place a Jira mention in your draft. When you send the message, BB fetches the current ticket context for the agent. You can also find tickets through the **@** menu or open a new conversation with an issue key.
 
-Agents receive tools to read issues, individual custom fields, comment pages and board issues, plus tools to post a comment, apply a workflow transition or assign an issue to yourself when asked. The issue panel offers the same writes as explicit buttons. A CLI and bundled skill provide the whole workflow from the terminal. The token stays in BB's secret settings.
+Agents receive tools to read issues, individual custom fields, comment pages, board issues and a one-call summary of linked issues and subtasks, plus tools to post a comment, apply a workflow transition or assign an issue to yourself when asked. The issue panel offers the same writes as explicit buttons. A CLI and bundled skill provide the whole workflow from the terminal. The token stays in BB's secret settings.
 
 ## Connection and scope
 

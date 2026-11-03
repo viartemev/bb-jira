@@ -126,6 +126,7 @@ Drag a card from the board into the message input. The input highlights while it
 | --- | --- |
 | `jira_issue(key, field?, offset?)` | Reads issue context, or an individual field (by ID or name) in 40k-character chunks |
 | `jira_comments(key, startAt?)` | Reads up to 50 comments, newest first, with the next page offset |
+| `jira_related(key)` | Lists the parent, linked issues and subtasks with status and assignee in one call |
 | `jira_boards(startAt?)` | Lists configured boards or a page of accessible boards |
 | `jira_board_issues(boardId, jql?, startAt?)` | Lists up to 50 board issues, optionally filtered with JQL |
 | `jira_comment(key, body)` | Posts a comment as your Jira account |
@@ -139,6 +140,7 @@ The same connection is available from the CLI:
 
 ```sh
 bb jira issue DEMO-104
+bb jira related DEMO-104
 bb jira boards --start 0
 bb jira comment DEMO-104 --body "Deployed to staging"
 bb jira transitions DEMO-104
@@ -159,7 +161,7 @@ Every write runs as your Jira account, with your permissions and workflow rules:
 - Credentials stay on the BB server. Issue content is shared with your selected agent provider when you send a mention or use a Jira tool.
 - Initial context includes non-empty fields labelled with their Jira names, the newest 50 comments, links, subtasks, and attachment metadata. It is capped at 48k characters with an explicit truncation notice.
 - Agents can request more field and comment pages. Individual comments are capped at 60k characters.
-- Attachment contents, full issue history, and linked issues are not downloaded automatically. Descriptions and comments display as plain text, including converted Cloud ADF.
+- Attachment contents, full issue history, and linked issues are not downloaded automatically; `jira_related` gives agents a one-call summary of linked issues and subtasks. Descriptions and comments display as plain text, including converted Cloud ADF.
 - Requests reject redirects, time out after 20 seconds, and cap upstream responses at 8 MiB. Error messages do not include upstream response bodies or credentials.
 
 ## Roadmap

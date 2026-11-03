@@ -94,6 +94,8 @@ test("write surfaces post comments and transitions with validated input", async 
     await assert.rejects(harness.behavior.callRpc("add_comment", { key: "APP-7/../../myself", body: "hi" }));
     assert.match(String(await harness.behavior.callAgentTool("jira_comment", { key: "APP-7", body: "привет" })), /501/);
     assert.match(String(await harness.behavior.callAgentTool("jira_transitions", { key: "APP-7" })), /Start progress/);
+    assert.deepEqual(JSON.parse(String(await harness.behavior.callAgentTool("jira_related", { key: "APP-7" }))), { key: "APP-7", related: [], truncated: false });
+    assert.equal((await harness.behavior.runCli(["related", "APP-7"])).exitCode, 0);
     assert.match(String(await harness.behavior.callAgentTool("jira_transition", { key: "APP-7", transitionId: "31" })), /In progress/);
     const cliComment = await harness.behavior.runCli(["comment", "APP-7", "--body", "привет"]);
     assert.equal(cliComment.exitCode, 0);

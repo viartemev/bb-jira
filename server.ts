@@ -70,6 +70,8 @@ export default async function plugin(bb: BbPluginApi) {
       while (JSON.stringify(data).length > 90_000 && data.comments.length > 1) { data.comments.pop(); data.next = startAt + data.comments.length; }
       return JSON.stringify(data);
     } });
+  bb.agents.registerTool({ name: "jira_related", description: "List an issue's parent, linked issues and subtasks in one call: relation, key, summary, status, assignee and type for each, up to 100. Use it instead of reading every linked issue with jira_issue.", parameters: z.object({ key: keySchema }),
+    execute: async ({ key }, { signal }) => JSON.stringify(await (await client()).related(key, signal)) });
   bb.agents.registerTool({ name: "jira_transitions", description: "List the workflow transitions available on a Jira issue: id, name and target status. Read-only; use jira_transition to apply one.", parameters: z.object({ key: keySchema }),
     execute: async ({ key }, { signal }) => JSON.stringify(await (await client()).transitions(key, signal)) });
   bb.agents.registerTool({ name: "jira_comment", description: "Write a comment on a Jira issue. This changes the ticket, so use it only when the user asked for a comment; pass their text, not a summary.", parameters: z.object({ key: keySchema, body: commentBodySchema }),
@@ -99,6 +101,8 @@ export default async function plugin(bb: BbPluginApi) {
   bb.cli.register(defineCli({ name: "jira", summary: "Read Jira boards and issues, and write comments, workflow transitions or self-assignment", commands: {
     boards: cliCommand({ summary: "List configured boards", options: { start: { type: "integer", default: 0, min: 0, max: 1_000_000, description: "Board page offset" } }, run: async (input, ctx) => ({ exitCode: 0, stdout: JSON.stringify(await (await client()).boards(pageSchema.parse({ startAt: input.options.start }).startAt, ctx.signal)) }) }),
     issue: cliCommand({ summary: "Read an issue and its context", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }], run: async (input, ctx) => ({ exitCode: 0, stdout: issueContext(await (await client()).detail(keySchema.parse(input.positionals.key), ctx.signal)) }) }),
+    related: cliCommand({ summary: "List an issue's parent, linked issues and subtasks", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }],
+      run: async (input, ctx) => ({ exitCode: 0, stdout: JSON.stringify(await (await client()).related(keySchema.parse(input.positionals.key), ctx.signal)) }) }),
     comment: cliCommand({ summary: "Write a comment on an issue", positionals: [{ name: "key", required: true, description: "Issue key, e.g. APP-123" }],
       options: { body: { type: "string", required: true, description: "Comment text; 1–32767 characters. Prefer --body-stdin for long or quoted text", stdin: true } },
       run: async (input, ctx) => { const key = keySchema.parse(input.positionals.key); const created = await (await client()).addComment(key, String(input.options.body), ctx.signal); return { exitCode: 0, stdout: JSON.stringify({ ...created, key }) }; } }),
