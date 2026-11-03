@@ -34,6 +34,21 @@ test("Cloud uses basic auth and enhanced search, with ADF text support", async (
   assert.equal((await c.search("key = APP-7"))[0].key, "APP-7");
   assert.equal(plainText({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Hello " }, { type: "mention", attrs: { text: "@Sam" } }, { type: "hardBreak" }, { type: "inlineCard", attrs: { url: "https://example.test" } }] }] }), "Hello @Sam\nhttps://example.test\n");
 });
+test("ADF text keeps link URLs, list markers and inline nodes", () => {
+  const p = (...content: unknown[]) => ({ type: "paragraph", content });
+  const t = (text: string, marks?: unknown[]) => ({ type: "text", text, ...(marks ? { marks } : {}) });
+  const doc = { type: "doc", content: [
+    p(t("See "), t("the runbook", [{ type: "strong" }, { type: "link", attrs: { href: "https://wiki.example.test/run" } }]), t(" or "), t("https://example.test", [{ type: "link", attrs: { href: "https://example.test" } }])),
+    { type: "bulletList", content: [
+      { type: "listItem", content: [p(t("First")), { type: "orderedList", attrs: { order: 3 }, content: [{ type: "listItem", content: [p(t("Nested"))] }, { type: "listItem", content: [p(t("Next"))] }] }] },
+      { type: "listItem", content: [p(t("Second"))] },
+    ] },
+    p({ type: "emoji", attrs: { shortName: ":tada:", text: "🎉" } }, t(" "), { type: "status", attrs: { text: "In review" } }, t(" due "), { type: "date", attrs: { timestamp: "1767225600000" } }),
+    { type: "rule" },
+    { type: "mediaSingle", content: [{ type: "media", attrs: { id: "abc", type: "file", alt: "trace.png" } }] },
+  ] };
+  assert.equal(plainText(doc), "See the runbook (https://wiki.example.test/run) or https://example.test\n- First\n  3. Nested\n  4. Next\n- Second\n🎉 [In review] due 2026-01-01\n---\n[attachment: trace.png]\n");
+});
 test("issue detail carries custom fields, links, attachment metadata and paginated comments", async () => {
   const c = new JiraClient(settings, fake(url => url.pathname.endsWith("/comment") ? { comments: [{ id: "10", author: { displayName: "Sam" }, body: "Investigating", created: "today" }], total: 60 } : rawIssue));
   const d = await c.detail("app-7");
