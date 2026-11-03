@@ -336,3 +336,20 @@ test("text attachments are recognised by MIME type, or by extension for generic 
   for (const [mime, name] of [["text/plain", "a"], ["application/json; charset=utf-8", "a"], ["application/vnd.api+json", "a"], ["application/xml", "a"], ["application/octet-stream", "trace.LOG"], ["", "dump.har"]]) assert.equal(isTextAttachment(mime, name), true, `${mime} ${name}`);
   for (const [mime, name] of [["image/png", "a.png"], ["application/pdf", "a.txt"], ["application/zip", "logs.zip"], ["application/octet-stream", "core.bin"]]) assert.equal(isTextAttachment(mime, name), false, `${mime} ${name}`);
 });
+
+test("board issues carry the epic or parent and the priority ID for swimlanes", async () => {
+  const fields: string[] = [];
+  const c = new JiraClient(settings, fake(url => {
+    fields.push(url.searchParams.get("fields") ?? "");
+    return { total: 3, issues: [
+      { key: "APP-1", fields: { summary: "Story", priority: { id: "2", name: "High" }, epic: { key: "APP-100", name: "Checkout", summary: "Checkout revamp" }, parent: { key: "APP-200", fields: { summary: "Ignored" } } } },
+      { key: "APP-2", fields: { summary: "Sub-task", parent: { key: "APP-1", fields: { summary: "Story" } } } },
+      { key: "APP-3", fields: { summary: "Loose" } },
+    ] };
+  }));
+  const [story, subtask, loose] = (await c.issues(9, "", 0)).issues;
+  assert.equal(fields[0], "summary,status,assignee,priority,issuetype,parent,epic");
+  assert.deepEqual([story.parentKey, story.parentSummary, story.priorityId], ["APP-100", "Checkout revamp", "2"]);
+  assert.deepEqual([subtask.parentKey, subtask.parentSummary, subtask.priorityId], ["APP-1", "Story", undefined]);
+  assert.equal("parentKey" in loose, false);
+});

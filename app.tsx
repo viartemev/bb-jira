@@ -16,6 +16,26 @@ type IssuePage = { issues: Issue[]; startAt: number; total: number; next: number
 /** Tasks loaded before the board stops and offers "Load more": a board full of old done work would otherwise take hundreds of requests. */
 export const boardTaskLimit = 1000;
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+export const groupings = { assignee: "Assignee", parent: "Epic or parent", priority: "Priority", none: "Nothing" } as const;
+export type Grouping = keyof typeof groupings;
+type Lane = { id: string; name: string; rank: number; items: Issue[] };
+/** Swimlanes for one grouping, in board order: people by name, epics by key, priorities by Jira's ID order; the "none of these" lane last. */
+export function swimlanes(issues: Issue[], grouping: Grouping): Lane[] {
+  const laneOf = (i: Issue): Omit<Lane, "items"> => {
+    if (grouping === "assignee") return { id: i.assigneeId ?? i.assignee, name: i.assignee, rank: i.assignee === "Unassigned" ? 1 : 0 };
+    if (grouping === "parent") return i.parentKey ? { id: i.parentKey, name: `${i.parentKey} ${i.parentSummary ?? ""}`.trim(), rank: 0 } : { id: "", name: "No epic or parent", rank: 1 };
+    if (grouping === "priority") return i.priority ? { id: i.priorityId ?? i.priority, name: i.priority, rank: 0 } : { id: "", name: "No priority", rank: 1 };
+    return { id: "all", name: "All tasks", rank: 0 };
+  };
+  const lanes = new Map<string, Lane>();
+  for (const issue of issues) {
+    const lane = laneOf(issue);
+    if (!lanes.has(lane.id)) lanes.set(lane.id, { ...lane, items: [] });
+    lanes.get(lane.id)!.items.push(issue);
+  }
+  const order = (a: Lane, b: Lane) => grouping === "priority" && Number(a.id) && Number(b.id) ? Number(a.id) - Number(b.id) : a.name.localeCompare(b.name, undefined, { numeric: true });
+  return [...lanes.values()].sort((a, b) => a.rank - b.rank || order(a, b));
+}
 
 export function dragIssue(event: DragEvent, issue: Issue) {
   const pill = document.createElement("span");
@@ -60,6 +80,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
   const [writeError, setWriteError] = useState("");
   const [refreshId, setRefreshId] = useState(0);
   const [moreAt, setMoreAt] = useState<number | null>(null);
+  const [grouping, setGrouping] = useState<Grouping>("assignee");
   const collected = useRef(new Map<string, Issue>());
   useRealtime("boards-refresh-requested", () => { void loadBoards(); setRefreshId(id => id + 1); });
   useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
@@ -199,13 +220,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
   const unmapped = issues.filter(i => !columns.some(c => c.statusIds.includes(i.statusId)));
   if (unmapped.length || !grouped.length) grouped.push({ name: columns.length ? "Other statuses" : "Issues", statusIds: [], items: unmapped });
   const columnKeys = grouped.map(column => new Set(column.items.map(issue => issue.key)));
-  const people = new Map<string, { id: string; name: string; items: Issue[] }>();
-  for (const issue of issues) {
-    const id = issue.assigneeId ?? issue.assignee;
-    if (!people.has(id)) people.set(id, { id, name: issue.assignee, items: [] });
-    people.get(id)!.items.push(issue);
-  }
-  const lanes = [...people.values()].sort((a, b) => a.name === "Unassigned" ? 1 : b.name === "Unassigned" ? -1 : a.name.localeCompare(b.name));
+  const lanes = swimlanes(issues, grouping);
   const gridStyle = { gridTemplateColumns: `repeat(${grouped.length}, minmax(256px, 1fr))` };
   return <div className={`flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-background text-foreground ${compact ? "p-2" : "p-4"}`}>
     <div aria-label="Board controls" className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.7fr)_2rem] gap-2">
@@ -283,11 +298,10 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
           <div className="sticky top-0 z-10 grid border-b border-border bg-background" style={gridStyle}>
             {grouped.map((c, idx) => <h2 key={idx} className="flex items-center justify-between gap-2 border-r border-border px-3 py-2.5 text-xs font-semibold last:border-r-0"><span className="truncate">{c.name}</span><span className="rounded-full bg-muted px-2 py-0.5 tabular-nums text-muted-foreground">{c.items.length}</span></h2>)}
           </div>
-          {lanes.map(person => <details key={person.id} open className="border-b border-border last:border-b-0" aria-label={`Assignee: ${person.name}`}>
-            <summary className="cursor-pointer bg-muted/50 px-3 py-2 text-xs font-semibold"><span className="sticky left-3 inline-flex gap-2"><span>{person.name}</span><span className="font-normal tabular-nums text-muted-foreground">{person.items.length}</span></span></summary>
-            <div className="grid" style={gridStyle}>
-              {grouped.map((c, idx) => <section key={idx} aria-label={`${person.name}: ${c.name}`} className="min-h-24 space-y-2 border-r border-border bg-muted/20 p-2 last:border-r-0">
-                {person.items.filter(i => columnKeys[idx].has(i.key)).map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="cursor-grab space-y-2 rounded-md border border-border bg-card p-3 shadow-sm active:cursor-grabbing">
+          {lanes.map(lane => {
+            const cells = <div className="grid" style={gridStyle}>
+              {grouped.map((c, idx) => <section key={idx} aria-label={grouping === "none" ? c.name : `${lane.name}: ${c.name}`} className="min-h-24 space-y-2 border-r border-border bg-muted/20 p-2 last:border-r-0">
+                {lane.items.filter(i => columnKeys[idx].has(i.key)).map(i => <article key={i.key} draggable onDragStart={event => dragIssue(event, i)} title="Drag into the message box" className="cursor-grab space-y-2 rounded-md border border-border bg-card p-3 shadow-sm active:cursor-grabbing">
                   <button className="w-full space-y-1 text-left text-sm" onClick={() => void openIssue(i.key)}>
                     <span className="block text-xs text-muted-foreground">{i.key} · {i.type}</span><span className="block font-medium">{i.summary}</span>
                     <span className="block text-xs text-muted-foreground">{i.status} · {i.priority}</span>
@@ -295,8 +309,13 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
                   <Button size="sm" variant="outline" onClick={() => addToChat(i)}>Add to chat</Button>
                 </article>)}
               </section>)}
-            </div>
-          </details>)}
+            </div>;
+            if (grouping === "none") return <div key={lane.id}>{cells}</div>;
+            return <details key={`${grouping}:${lane.id}`} open className="border-b border-border last:border-b-0" aria-label={`${groupings[grouping]}: ${lane.name}`}>
+              <summary className="cursor-pointer bg-muted/50 px-3 py-2 text-xs font-semibold"><span className="sticky left-3 inline-flex gap-2"><span>{lane.name}</span><span className="font-normal tabular-nums text-muted-foreground">{lane.items.length}</span></span></summary>
+              {cells}
+            </details>;
+          })}
           {!busy && !issues.length && <p className="p-8 text-center text-sm text-muted-foreground">No tasks match this board and filter.</p>}
         </div>
       </div>
@@ -307,7 +326,13 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
             <Button size="sm" variant="ghost" onClick={() => void loadMoreTasks()}>Load more tasks</Button>
           </>}
         </span>
-        <span>{busy ? "Loading all tasks…" : "Grouped by assignee"}</span>
+        <span className="flex items-center gap-2">
+          {busy && <span>Loading all tasks…</span>}
+          <label htmlFor="jira-grouping">Swimlanes</label>
+          <select id="jira-grouping" className="h-7 rounded-md border border-input bg-transparent px-1 text-xs" value={grouping} onChange={e => setGrouping(e.target.value as Grouping)}>
+            {Object.entries(groupings).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </span>
       </div>
     </>}
   </div>;
