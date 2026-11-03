@@ -295,3 +295,44 @@ test("related issues come back in one list with status and assignee, from one re
   assert.deepEqual(await lonely.related("APP-7"), { key: "APP-7", related: [], truncated: false });
   assert.equal(calls, 1);
 });
+
+test("text attachments are read in chunks with a size cap; binary ones stay metadata", async () => {
+  const requests: URL[] = [];
+  const files: Record<string, { meta: object; body: string | Uint8Array<ArrayBuffer> }> = {
+    "10": { meta: { id: "10", filename: "server.log", mimeType: "application/octet-stream", size: 50_000 }, body: "x".repeat(50_000) },
+    "11": { meta: { id: "11", filename: "shot.png", mimeType: "image/png", size: 3 }, body: "png" },
+    "12": { meta: { id: "12", filename: "payload.json", mimeType: "application/json", size: 2_000_000 }, body: "{\"a\":1}".padEnd(2_000_000, " ") },
+    "13": { meta: { id: "13", filename: "data.txt", mimeType: "text/plain", size: 3 }, body: new Uint8Array([97, 0, 98]) },
+  };
+  const handler = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input)); requests.push(url);
+    const id = url.pathname.match(/(?:attachment|content)\/(\d+)/)?.[1] ?? "";
+    if (/\/rest\/api\/\d\/attachment\/\d+$/.test(url.pathname)) return Response.json(files[id].meta);
+    return new Response(files[id].body);
+  }) as typeof fetch;
+  const server = new JiraClient(settings, handler);
+  const log = await server.attachment("10");
+  assert.deepEqual({ ...log, text: log.text?.length }, { id: "10", filename: "server.log", mimeType: "application/octet-stream", size: 50_000, text: 40_000, offset: 0, next: 40_000, note: "" });
+  assert.equal(requests[1].pathname, "/jira/secure/attachment/10/server.log");
+  const rest = await server.attachment("10", 40_000);
+  assert.deepEqual([rest.text?.length, rest.next], [10_000, null]);
+
+  const before = requests.length;
+  assert.deepEqual(await server.attachment("11"), { id: "11", filename: "shot.png", mimeType: "image/png", size: 3, text: null, offset: 0, next: null, note: "Binary attachment: only its metadata can be read." });
+  assert.equal(requests.length, before + 1, "a binary attachment is never downloaded");
+  assert.equal((await server.attachment("13")).text, null);
+
+  const cloud = new JiraClient({ ...settings, authMode: "cloud", email: "user@example.test" }, handler);
+  const big = await cloud.attachment("12", 1_048_000);
+  assert.equal(requests.at(-1)!.pathname, "/jira/rest/api/3/attachment/content/12");
+  assert.equal(requests.at(-1)!.searchParams.get("redirect"), "false");
+  assert.deepEqual([big.offset, big.text?.length, big.next], [1_048_000, 576, null]);
+  assert.match(big.note, /first 1 MiB of 2000000 bytes/);
+  for (const id of ["", "../1", "1/../../myself", "abc"]) await assert.rejects(server.attachment(id));
+});
+
+test("text attachments are recognised by MIME type, or by extension for generic types", async () => {
+  const { isTextAttachment } = await import("../jira");
+  for (const [mime, name] of [["text/plain", "a"], ["application/json; charset=utf-8", "a"], ["application/vnd.api+json", "a"], ["application/xml", "a"], ["application/octet-stream", "trace.LOG"], ["", "dump.har"]]) assert.equal(isTextAttachment(mime, name), true, `${mime} ${name}`);
+  for (const [mime, name] of [["image/png", "a.png"], ["application/pdf", "a.txt"], ["application/zip", "logs.zip"], ["application/octet-stream", "core.bin"]]) assert.equal(isTextAttachment(mime, name), false, `${mime} ${name}`);
+});
