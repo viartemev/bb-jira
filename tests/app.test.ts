@@ -85,6 +85,40 @@ test("Jira side panel keeps the chat open and supports mention insertion and dra
   } finally { slot.lifecycle.unmount(); dom.window.close(); }
 });
 
+test("a large board stops at the task limit and loads more on request", async () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
+  Object.defineProperties(globalThis, {
+    window: { value: dom.window, configurable: true }, document: { value: dom.window.document, configurable: true },
+    navigator: { value: dom.window.navigator, configurable: true }, HTMLElement: { value: dom.window.HTMLElement, configurable: true },
+    MutationObserver: { value: dom.window.MutationObserver, configurable: true },
+  });
+  const { renderSlot } = await import("@get-bb/plugin-sdk/testing/app");
+  const { fireEvent, waitFor } = await import("@testing-library/react");
+  const { JiraPanel, boardTaskLimit } = await import("../app");
+  assert.equal(boardTaskLimit, 1000);
+  const starts: number[] = [];
+  const task = (n: number) => ({ key: `APP-${n}`, summary: `Task ${n}`, status: "To do", statusId: "1", assignee: "Sam", priority: "Low", type: "Task", url: `https://jira.example.test/browse/APP-${n}` });
+  const slot = renderSlot({ component: JiraPanel }, { taskLimit: 4 }, { pluginId: "jira-boards", rpc: {
+    boards: () => ({ boards: [{ id: 9, name: "Team", type: "kanban" }], next: null }),
+    quick_filters: () => ({ available: true, filters: [] }),
+    columns: () => [{ name: "To do", statusIds: ["1"] }],
+    issues: input => { const { startAt } = input as { startAt: number }; starts.push(startAt); return { issues: [task(startAt + 1), task(startAt + 2)], startAt, total: 10, next: startAt + 2 < 10 ? startAt + 2 : null }; },
+  } });
+  try {
+    await slot.findByText("4 of 10 tasks");
+    await slot.findByRole("button", { name: "Load more tasks" });
+    assert.deepEqual(starts, [0, 2]);
+    fireEvent.click(slot.getByRole("button", { name: "Load more tasks" }));
+    await slot.findByText("8 of 10 tasks");
+    assert.deepEqual(starts, [0, 2, 4, 6]);
+    fireEvent.click(await slot.findByRole("button", { name: "Load more tasks" }));
+    await slot.findByText("10 of 10 tasks");
+    await waitFor(() => assert.equal(slot.queryByRole("button", { name: "Load more tasks" }), null));
+    assert.deepEqual(starts, [0, 2, 4, 6, 8]);
+    assert.ok(slot.getByText("Task 10"));
+  } finally { slot.lifecycle.unmount(); dom.window.close(); }
+});
+
 test("switching boards stops pagination and ignores a late response from the previous board", async () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://bb.example.test" });
   Object.defineProperties(globalThis, {

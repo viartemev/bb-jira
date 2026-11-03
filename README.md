@@ -23,7 +23,7 @@ Browse a Kanban board beside your chat, drag in a ticket, and give your agent th
 ## Bring the board into the conversation
 
 - **A real side panel.** Jira opens as a full-height tab alongside Browser and Terminal. Your conversation stays visible.
-- **A familiar Kanban board.** Horizontal status columns, fixed headings, and collapsible swimlanes grouped by assignee. All task pages load automatically.
+- **A familiar Kanban board.** Horizontal status columns, fixed headings, and collapsible swimlanes grouped by assignee. Task pages load automatically, up to 1000 tasks at a time.
 - **Board quick filters.** Use the quick filters already configured in Jira, combine several, or add your own JQL.
 - **A compact toolbar.** Choose a board, apply a JQL filter, open an issue by key or URL, and refresh the board in one row.
 - **Drag a ticket into chat.** Drop a card anywhere inside the message input, or use **Add to chat**. Your existing draft stays intact.
@@ -89,7 +89,7 @@ Open BB's side panel, choose **+ → Jira**, and select a board. Existing thread
 
 Scroll horizontally to see other status columns, or widen the panel. Each person has a collapsible swimlane with their tasks in the matching status columns. Tasks without an assignee have their own lane.
 
-All pages load automatically, so active work on later pages is not hidden behind the first page of completed tasks. The footer shows **loaded / total** task counts and loading progress; counts are complete when loading finishes.
+All pages load automatically, so active work on later pages is not hidden behind the first page of completed tasks. The footer shows **loaded / total** task counts and loading progress. After 1000 tasks loading stops: narrow the board with JQL or a quick filter, or select **Load more tasks**.
 
 ### Filter, find, refresh
 
