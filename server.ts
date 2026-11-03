@@ -1,8 +1,13 @@
 import { defineRpcContract, defineCli, cliCommand, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { JiraClient, JiraHttpError, attachmentIdSchema, boardSchema, columnSchema, quickFilterSchema, detailSchema, issuePageSchema, keySchema, pageSchema, parseBoardIds, normalizeBaseUrl, issueContext, commentBodySchema, commentSchema, transitionIdSchema, transitionResultSchema, transitionSchema, assignResultSchema, type JiraSettings } from "./jira";
+import { groupings, type Grouping } from "./lib/view-state";
 
 const boardInput = pageSchema.extend({ boardId: z.number().int().positive(), jql: z.string().max(4000).default("") });
+const viewStateSchema = z.object({
+  boardId: z.number().int().positive().nullable(), jql: z.string().max(4000),
+  quickFilterIds: z.array(z.string().min(1).max(200)).max(50), grouping: z.enum(Object.keys(groupings) as [Grouping, ...Grouping[]]),
+});
 export const rpcContract = defineRpcContract({
   boards: { input: pageSchema, output: z.object({ boards: z.array(boardSchema), next: z.number().nullable() }) },
   columns: { input: z.object({ boardId: z.number().int().positive() }), output: z.array(columnSchema) },
@@ -13,6 +18,8 @@ export const rpcContract = defineRpcContract({
   transitions: { input: z.object({ key: keySchema }), output: z.array(transitionSchema) },
   transition: { input: z.object({ key: keySchema, transitionId: transitionIdSchema, comment: commentBodySchema.optional() }), output: transitionResultSchema },
   assign_to_me: { input: z.object({ key: keySchema }), output: assignResultSchema },
+  view_state: { input: z.null(), output: viewStateSchema.nullable() },
+  save_view_state: { input: viewStateSchema, output: z.null() },
   connection: { input: z.null(), output: z.object({ displayName: z.string() }) },
   credential_status: { input: z.null(), output: z.object({ saved: z.boolean(), cloud: z.boolean() }) },
   refresh_boards: { input: z.null(), output: z.null() },
@@ -53,6 +60,9 @@ export default async function plugin(bb: BbPluginApi) {
     transitions: async ({ key }) => (await client()).transitions(key),
     transition: async ({ key, transitionId, comment }) => (await client()).transition(key, transitionId, comment),
     assign_to_me: async ({ key }) => (await client()).assignToMe(key),
+    // The Jira tab reopens on the last board, filters and grouping; one saved view per BB user.
+    view_state: async () => viewStateSchema.safeParse(await bb.storage.kv.get("view-state")).data ?? null,
+    save_view_state: async view => { await bb.storage.kv.set("view-state", view); return null; },
     connection: async () => { const user = await (await client()).myself(); return { displayName: String(user.displayName ?? user.name ?? "Connected") }; },
     credential_status: async () => ({ saved: Boolean((await settings.get()).pat), cloud: (await mode.get()).authMode === "cloud" }),
     refresh_boards: async () => { bb.realtime.publish("boards-refresh-requested", {}); return null; },

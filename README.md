@@ -102,6 +102,8 @@ The top toolbar keeps the controls together:
 
 When the board exposes quick filters, their names appear as compact buttons beneath the toolbar. Click to toggle them; **Clear filters** resets the selection. Selected quick filters and manual JQL are combined with **AND**. If Jira does not expose these filters, the board and manual JQL remain available.
 
+The Jira tab remembers the selected board, the applied JQL, the selected quick filters and the swimlane grouping, and reopens where you left it. The view is saved per BB user, not per thread.
+
 For example, show your unresolved work:
 
 ```jql

@@ -4,6 +4,7 @@ import type { DragEvent, } from "react";
 import type { rpcContract } from "./server";
 import type { Detail, Issue, QuickFilter, Transition } from "./jira";
 import { combineBoardFilters } from "./lib/board-filters";
+import { groupings, type Grouping, type ViewState } from "./lib/view-state";
 import { namedFields } from "./lib/fields";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -16,8 +17,6 @@ type IssuePage = { issues: Issue[]; startAt: number; total: number; next: number
 /** Tasks loaded before the board stops and offers "Load more": a board full of old done work would otherwise take hundreds of requests. */
 export const boardTaskLimit = 1000;
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-export const groupings = { assignee: "Assignee", parent: "Epic or parent", priority: "Priority", none: "Nothing" } as const;
-export type Grouping = keyof typeof groupings;
 type Lane = { id: string; name: string; rank: number; items: Issue[] };
 /** Swimlanes for one grouping, in board order: people by name, epics by key, priorities by Jira's ID order; the "none of these" lane last. */
 export function swimlanes(issues: Issue[], grouping: Grouping): Lane[] {
@@ -66,6 +65,8 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
   const [filterWarning, setFilterWarning] = useState("");
   const visibleFilters = quickFilters?.boardId === boardId ? quickFilters.items : [];
   const selectedIds = selectedFilters?.boardId === boardId ? selectedFilters.ids : [];
+  // Saved quick filters only apply once the board's filters are known; loading tasks before that would load the board twice.
+  const waitingForFilters = selectedIds.length > 0 && quickFilters?.boardId !== boardId;
   const effectiveJql = combineBoardFilters(filter, visibleFilters.filter(f => selectedIds.includes(f.id)).map(f => f.jql));
   const [key, setKey] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -81,6 +82,9 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
   const [refreshId, setRefreshId] = useState(0);
   const [moreAt, setMoreAt] = useState<number | null>(null);
   const [grouping, setGrouping] = useState<Grouping>("assignee");
+  /** The saved view, read once; nothing is saved until it has been applied, so opening the tab cannot overwrite it. */
+  const savedView = useRef<Promise<ViewState | null> | null>(null);
+  const [restored, setRestored] = useState(false);
   const collected = useRef(new Map<string, Issue>());
   useRealtime("boards-refresh-requested", () => { void loadBoards(); setRefreshId(id => id + 1); });
   useRealtime("credential-status-changed", () => { void loadBoards(); setRefreshId(id => id + 1); });
@@ -89,14 +93,29 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
 
   async function loadBoards(startAt = 0) {
     setBusy(true); setError("");
+    savedView.current ??= rpc.call("view_state", null).catch(() => null);
     try {
-      const d = await rpc.call("boards", { startAt });
+      const [d, view] = await Promise.all([rpc.call("boards", { startAt }), savedView.current]);
       setBoards(old => startAt ? [...old, ...d.boards] : d.boards);
       setBoardNext(d.next);
-      if (!startAt) setBoardId(old => old && d.boards.some(b => b.id === old) ? old : d.boards[0]?.id ?? null);
+      if (startAt) return;
+      if (!restored && view) {
+        setGrouping(view.grouping);
+        if (view.boardId && d.boards.some(b => b.id === view.boardId)) {
+          setJql(view.jql); setFilter(view.jql);
+          setSelectedFilters({ boardId: view.boardId, ids: view.quickFilterIds });
+        }
+      }
+      setBoardId(old => old && d.boards.some(b => b.id === old) ? old : !restored && view?.boardId && d.boards.some(b => b.id === view.boardId) ? view.boardId : d.boards[0]?.id ?? null);
+      setRestored(true);
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   useEffect(() => { void loadBoards(); }, [rpc]);
+  const selectedKey = selectedIds.join("\n");
+  useEffect(() => {
+    if (!restored) return;
+    void rpc.call("save_view_state", { boardId, jql: filter, quickFilterIds: selectedIds, grouping }).catch(() => {});
+  }, [rpc, restored, boardId, filter, selectedKey, grouping]);
   useEffect(() => {
     let active = true;
     setFilterWarning("");
@@ -106,7 +125,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
       if (!active) return;
       setQuickFilters({ boardId: selectedBoard, items: result.filters });
       if (!result.available) setFilterWarning("This Jira does not expose board quick filters. You can still use JQL.");
-    }, () => { if (active) setFilterWarning("Could not load board quick filters. You can still use JQL; refresh to retry."); });
+    }, () => { if (active) { setQuickFilters({ boardId: selectedBoard, items: [] }); setFilterWarning("Could not load board quick filters. You can still use JQL; refresh to retry."); } });
     return () => { active = false; };
   }, [rpc, boardId, refreshId]);
   /** Follow task pages until Jira runs out or another `taskLimit` tasks are loaded; the rest wait for "Load more tasks". */
@@ -126,7 +145,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
   useEffect(() => {
     const generation = ++boardGeneration.current;
     collected.current = new Map(); setIssues([]); setColumns([]); setTotal(0); setMoreAt(null);
-    if (!boardId) return;
+    if (!boardId || waitingForFilters) return;
     setBusy(true); setError("");
     const selectedBoard = boardId;
     const active = () => generation === boardGeneration.current;
@@ -140,7 +159,7 @@ export function JiraPanel({ compact = false, taskLimit = boardTaskLimit }: { com
       finally { if (active()) setBusy(false); }
     })();
     return () => { boardGeneration.current++; };
-  }, [rpc, boardId, effectiveJql, refreshId]);
+  }, [rpc, boardId, effectiveJql, refreshId, waitingForFilters]);
   async function loadMoreTasks() {
     if (moreAt === null || !boardId || busy) return;
     const generation = boardGeneration.current;

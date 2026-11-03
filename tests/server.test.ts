@@ -117,3 +117,18 @@ test("write surfaces post comments and transitions with validated input", async 
     assert.equal(writes.every(w => w.auth === "Bearer fake-secret"), true);
   } finally { globalThis.fetch = original; await harness.lifecycle.dispose(); }
 });
+
+test("the board view is saved per user and a damaged saved view is ignored", async () => {
+  const { bb, harness } = createFakePluginHost({ pluginId: "jira-boards", settings: { baseUrl: "https://jira.example.test", pat: "fake-secret" } });
+  try {
+    await plugin(bb);
+    assert.equal(await harness.behavior.callRpc("view_state", null), null);
+    const view = { boardId: 9, jql: "project = APP", quickFilterIds: ["12"], grouping: "priority" };
+    await harness.behavior.callRpc("save_view_state", view);
+    assert.deepEqual(await harness.behavior.callRpc("view_state", null), view);
+    await assert.rejects(harness.behavior.callRpc("save_view_state", { ...view, grouping: "sprint" }));
+    await assert.rejects(harness.behavior.callRpc("save_view_state", { ...view, jql: "x".repeat(4001) }));
+    await bb.storage.kv.set("view-state", { boardId: "nine" });
+    assert.equal(await harness.behavior.callRpc("view_state", null), null);
+  } finally { await harness.lifecycle.dispose(); }
+});
